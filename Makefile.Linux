@@ -1,0 +1,25 @@
+CFLAGS= -g3 -I ../../ -lSDL2 -lSDL2main -lSDL2_image -lSDL2_image -lSDL2_ttf -lm -I../../duktape/src/
+
+SOURCES=../../src/renderer.c \
+	../../src/helpers.c \
+ 	../../src/browser/*.c \
+ 	../../src/browser/classes/*.c \
+ 	../../src/adapters/*.c \
+  	../../src/rendering/*.c \
+	../../src/cache/*.c \
+	../../src/net/net_linux.c \
+	../../src/net/tcp_debugger.c \
+	../../src/audio/audio.c \
+	../../src/usb/keyboard_linux.c \
+   	../../duktape/src/duktape.c \
+   	../../duktape/extras/console/duk_console.c \
+	./src/js.c \
+	./src/direct_serial.c \
+	./src/vitter_main.c \
+#	tinypy/modules/math/*.c \
+#	tinypy/modules/random/*.c \
+
+default: all
+
+all:
+	gcc ${SOURCES} ${CFLAGS} ../../liblexbor.so -o quark
