@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Vipper Zero</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <div id="header-container">
+    <div id="header">Vipper Zero | Version 00.01 </div>
+  </div>
+  <div id="notification"></div>
+
+  <div id="container-small" class="inline">
+    <div id="menu">
+    </div>
+  </div>
+
+
+  <div id="footer">◯ : Run Scan  |  □ : Enumerate Services/Characteristics</div>
+
+  <script type="text/javascript">
+    // Navigation
+    var page = 0
+    var devices = []
+    var displayed = []
+    var menu_selected = 0
+    var max_menu_items = 8 // In this menu we can only display 8 items at a time
+
+    function draw_menu(devices) {
+      var new_content = '<div id="devices-list"></div>'
+      displayed = devices
+
+      document.getElementById("menu").innerHTML = new_content
+      new_content = ""
+      for (var i = 0; i < devices.length; i++) {
+        new_content += '<div class="device-item" id="menuitem'
+        new_content += i + '">[ ' + devices[i].name + " ] ("
+            + devices[i].mac + ")  power: " 
+            + devices[i].rssi + " </div>"
+      }
+      console.log('new_content ' + new_content)
+      document.getElementById("devices-list").innerHTML = new_content + "</div>"
+    }
+
+    function menu_select() {
+      var cmd = "subsend 1 " + displayed[menu_selected]
+      console.log("CMD: "+cmd)
+      var bytes_sent = serial_send(cmd)
+      var output = read_buffer_until_OK(30)
+      console.log('Output: '+output)
+    }
+
+    function menu_move(direction) {
+      var selected_item = document.getElementById('menuitem'+menu_selected)
+      selected_item.style.backgroundColor = '#2c2c2d'
+
+      if (direction === "DOWN") {
+        if (menu_selected >= displayed.length - 1) {
+          if (page < ((devices.length / max_menu_items) | 0)) {
+            page++
+          } else {
+            page = 0
+          }
+          draw_menu(devices.slice(page * max_menu_items, (page + 1) * max_menu_items))
+          menu_selected = 0
+        } else {
+          menu_selected++
+        }
+      } else {
+        if (menu_selected <= 0) {
+          if (page > 0) {
+            page--
+          } else if (page <= 0) {
+            page = (devices.length / max_menu_items) | 0 
+          }
+          draw_menu(devices.slice(page * max_menu_items, (page + 1) * max_menu_items))
+          menu_selected = page <= 0 ? (displayed.length - 1) : 0
+        } else {
+          menu_selected--
+        }
+      }
+      console.log('Page is ' + page + ' menu_selected is ' + menu_selected)
+      selected_item = document.getElementById('menuitem'+menu_selected)
+      selected_item.style.backgroundColor = '#06B6D4'
+    }
+
+    function read_buffer_until_OK(timeout) {
+      var buffer = serial_recv(timeout)
+      var data = buffer || ""
+      var i = 0
+      while (!data.includes("OK") && !data.includes("ERR") && i < 3) {
+        buffer = serial_recv(timeout)
+        if (buffer) {
+          data += buffer
+        } else {
+          i++ // If we have more that 3 empty recv() we stop
+        }
+      }
+      return data
+    }
+
+
+    function parse_bt_devices(devices_out) {
+        devices_out = devices_out.split('\n')
+        devices_arr = []
+        for (var i = 1; i < devices_out.length - 1; i++) {
+            var device_obj = {}
+            var device = devices_out[i].trim()
+            device = device.split(' ')
+            console.log(device)
+            if (device.length > 4) {
+                device_obj['mac'] = device[0]
+                device_obj['rssi'] = device[2].slice(5)
+                device_obj['name'] = device[4].slice(5)
+                if (device.length > 6) {
+                    device_obj['services'] = device[6].slice(5)
+                }
+                devices_arr.push(device_obj)
+            }
+        }
+        return devices_arr
+    }
+
+    function bt_scan(seconds) {
+        var bytes_sent = serial_send("blescan " + seconds)
+        setTimeout(function () {
+            var bt_devices = read_buffer_until_OK(seconds)
+            devices = parse_bt_devices(bt_devices)
+            draw_menu(devices.slice(0, max_menu_items))
+            console.log(devices)
+        }, seconds * 1000)
+        document.getElementById("menu").innerHTML = "<div id='loader'>Scanning, please wait...</div>"
+    }
+
+    function enumerate_device(device) {
+        console.log("Enumerating device " + device)
+        var bytes_sent = serial_send("blegatt " + device)
+        setTimeout(function() {
+            var output = read_buffer_until_OK(30)
+            console.log("ENUMERATE OUTPUT " + output)
+        }, 10000)
+    }
+
+    document.addEventListener('keydown', function (event) {
+      console.log("Key pressed", event)
+      if (event.code === 1073741906) {
+        menu_move("UP")
+      } else if (event.code === 1073741905) {
+        menu_move("DOWN")
+      } else if (event.code === 27) {
+        serial_close()
+        window.location = "bluetooth/index.html"
+      } else if (event.code === 13) {
+        menu_select()
+      } else if (event.code === 120) {
+        enumerate_device(devices[menu_selected].mac)
+      } else if (event.code === 122) {
+        bt_scan(20)
+      }
+    })
+
+    var mapping = [
+      "X",
+      "CIRCLE",
+      "SQUARE",
+      "TRIANGLE",
+      "SHARE",
+      "PS",
+      "OPTIONS",
+      "LEFTSTICK",
+      "RIGHTSTICK",
+      "LEFTSHOULDER",
+      "RIGHTSHOULDER",
+      "DPAD_UP",
+      "DPAD_DOWN",
+      "DPAD_LEFT",
+      "DPAD_RIGHT",
+    ] // Only implemented the first 15 buttons
+
+    document.addEventListener("gamepadconnected", function (event) {
+      navigator.getGamepads()
+      // To initialize the gamepad
+    })
+
+    document.addEventListener('button_press', function (event) {
+      // The "button_press" event is not a classic JS event
+      // but it is a custom quark optimization for the non-existent gamepad
+      // button press event which usually requires a setTimeout +
+      // polling of all the gamepads that is done in JS.
+      if (mapping[event.code] === "DPAD_UP") {
+        menu_move("UP")
+      } else if (mapping[event.code] === "DPAD_DOWN") {
+        menu_move("DOWN")
+      } else if (mapping[event.code] == "TRIANGLE") {
+        serial_close()
+        window.location = "sdr.html"
+      } else if (mapping[event.code] == "X") {
+        menu_select()
+      } else if (mapping[event.code] == "SQUARE") {
+        bt_scan(20)
+      } else if (mapping[event.code] == "CIRCLE") {
+        enumerate_device(devices[menu_selected].mac)
+      }
+
+    })
+
+    bt_scan(15)
+    // document.getElementById('menuitem'+menu_selected).style.backgroundColor = '#06B6D4'
+
+  </script>
+
+</body>
+</html>

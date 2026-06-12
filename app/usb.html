@@ -9,58 +9,48 @@
 <body>
 
   <div id="header-container">
-    <div id="header">
-      Vipper Zero | Version 00.01 | Battery 100%
-    </div>
+    <div id="header">Vipper Zero | Version 00.01 </div>
   </div>
 
   <div id="container" class="inline">
     <div id="menu">
-      <div class="button-container" id="menuitem0" style="background-color: #f06901">
-        <button class="menu-button">Payload 1</button>
-
+      <div class="button-container" id="menuitem0" style="background-color: #06B6D4">
+        <button class="menu-button" onclick="load_payload(1)">Payload 1</button>
       </div>
+
       <div class="button-container" id="menuitem1">
-        <button class="menu-button">Payload 2</button>
-
-      </div>
-      <div class="button-container" id="menuitem2">
-        <button class="menu-button">Payload 3</button>
+        <button class="menu-button" onclick="load_payload(2)">Payload 2</button>
       </div>
 
-      <div class="button-container" id="menuitem3">
-        <button class="menu-button">Payload 4</button>
-      </div>
     </div>
+
   </div>
 
-  <div id="footer">
-    Pre-Release Version | Not production-ready
-  </div>
+
+  <div id="footer">Pre-Release Version | Not production-ready </div>
 
   <script type="text/javascript">
     var menu_selected = 0
+
+    function load_payload(id) {
+      keyboard_send_string("Payload "+id);
+    }
 
     function menu_move(direction) {
       var max_items = 3
       // Because we have 4 items in the menu
 
-      var selected_item = document.getElementById('menuitem'+menu_selected)
-      selected_item.style.backgroundColor = '#61573a'
+      var selected_item = document.getElementById('menuitem' + menu_selected)
+      selected_item.style.backgroundColor = '#34444a'
 
       if (direction === "UP") {
         menu_selected = (menu_selected > 0) ? menu_selected - 1 : max_items
       } else {
         menu_selected = (menu_selected < max_items) ? menu_selected + 1 : 0
       }
-      selected_item = document.getElementById('menuitem'+menu_selected)
-      selected_item.style.backgroundColor = '#f06901'
+      selected_item = document.getElementById('menuitem' + menu_selected)
+      selected_item.style.backgroundColor = '#06B6D4'
     }
-
-    document.addEventListener("gamepadconnected", function (event) {
-      navigator.getGamepads()
-      // To initialize the gamepad
-    })
 
     document.addEventListener('keydown', function (event) {
       console.log("Key pressed", event)
@@ -69,7 +59,10 @@
       } else if (event.code === 1073741905) {
         menu_move("DOWN")
       } else if (event.code === 27) {
+        keyboard_shutdown()
         window.location = "index.html"
+      } else if (event.code == 13) {
+        load_payload(menu_selected)
       }
     })
 
@@ -91,8 +84,10 @@
       "DPAD_RIGHT",
     ] // Only implemented the first 15 buttons
 
-
-
+    document.addEventListener("gamepadconnected", function (event) {
+      navigator.getGamepads()
+      // To initialize the gamepad
+    })
 
     document.addEventListener('button_press', function (event) {
       // The "button_press" event is not a classic JS event
@@ -103,12 +98,19 @@
         menu_move("UP")
       } else if (mapping[event.code] === "DPAD_DOWN") {
         menu_move("DOWN")
+      } else if (mapping[event.code] == "TRIANGLE") {
+        keyboard_shutdown()
+        window.location = "index.html"
+      } else if (mapping[event.code] == "X") {
+        load_payload(menu_selected)
       }
 
-      console.log("Button press", event)
     })
+
+    keyboard_init()
 
   </script>
 
 </body>
+
 </html>

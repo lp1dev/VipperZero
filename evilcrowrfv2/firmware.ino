@@ -18,7 +18,37 @@
 #include <SPI.h>
 #include "SD.h"
 
+// nRF24 (optional, receive-only channel scanner)
+#include <nRF24L01.h>
+#include <RF24.h>
+
+// BLE (built into the ESP32, no extra hardware)
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEScan.h>
+#include <BLEAdvertisedDevice.h>
+#include <BLEClient.h>
+
 #define SERIAL_BAUD 115200
+#define EVILCROW_FW_VERSION "1.0.0"
+
+// nRF24 wiring (you solder these to a free header on the V2)
+//   CE  -> GPIO 32     CSN -> GPIO 33
+//   SCK -> 14 (shared with CC1101)   MISO -> 12   MOSI -> 13
+// Power the module from 3.3V; add a 10uF cap across VCC/GND if you see resets.
+#define NRF_CE_PIN  32
+#define NRF_CSN_PIN 33
+
+// Defined here, immediately after includes, so the Arduino IDE's auto-
+// generated function prototypes (which it injects near the top of the
+// sketch) can resolve the type wherever findPreset() is declared.
+struct Preset {
+  const char *name;
+  int   mod;        // 2 = ASK/OOK, 0 = 2-FSK
+  float rxbw;       // kHz
+  float deviation;  // kHz
+  int   datarate;   // kBaud
+};
 
 // MicroSD slot pins
 #define SD_SCLK 18
@@ -76,15 +106,39 @@ String jammer_tx = "0";
 String transmit;
 bool serialRxEcho = true;   // stream decoded RX frames over USB serial
 
-// CC1101 preset descriptor (defined here, before the first function, so the
-// Arduino IDE's auto-generated prototypes can see the type).
-struct Preset {
-  const char *name;
-  int   mod;        // 2 = ASK/OOK, 0 = 2-FSK
-  float rxbw;       // kHz
-  float deviation;  // kHz
-  int   datarate;   // kBaud
+// nRF24 state (receive-only)
+RF24 nrf(NRF_CE_PIN, NRF_CSN_PIN);
+bool nrfPresent = false;
+
+// BLE GATT client state - one persistent connection across commands.
+BLEClient *bleClient = nullptr;
+String     bleConnectedMac = "";
+bool       bleNotifyStream = false;     // when true, notifications stream to serial
+
+// Pending-notifications ring buffer (filled from ISR-ish callback, drained in loop).
+struct BleNotif {
+  char     uuid[40];
+  uint8_t  data[64];
+  size_t   len;
+  uint32_t ts;
 };
+#define BLE_NOTIF_QUEUE 16
+static volatile BleNotif bleNotifQ[BLE_NOTIF_QUEUE];
+static volatile uint8_t  bleNotifHead = 0, bleNotifTail = 0;
+
+static void bleNotifyCallback(BLERemoteCharacteristic *rc,
+                              uint8_t *data, size_t len, bool isNotify) {
+  uint8_t next = (bleNotifHead + 1) % BLE_NOTIF_QUEUE;
+  if (next == bleNotifTail) return;     // queue full, drop
+  BleNotif *slot = (BleNotif*)&bleNotifQ[bleNotifHead];
+  String uuid = String(rc->getUUID().toString().c_str());
+  strncpy(slot->uuid, uuid.c_str(), sizeof(slot->uuid) - 1);
+  slot->uuid[sizeof(slot->uuid) - 1] = 0;
+  slot->len = len > sizeof(slot->data) ? sizeof(slot->data) : len;
+  memcpy(slot->data, data, slot->len);
+  slot->ts = millis();
+  bleNotifHead = next;
+}
 
 void appendFile(fs::FS &fs, const char * path, const char * message, String messagestring){
   logs = fs.open(path, FILE_APPEND);
@@ -412,6 +466,20 @@ static void cliHelp() {
   Serial.println(F("  subdel <name>                                            delete a saved .sub"));
   Serial.println(F("  txbin <module> <freq> <preset> <te_us> <bits>            transmit OOK binary stream"));
   Serial.println(F("  lastbin [te_us]                                          show last RX as binary symbols"));
+  Serial.println(F("  nrfscan [start] [end] [dwell_us] [passes]                nRF24 RX-only channel scan (needs module)"));
+  Serial.println(F("  nrflog [clear]                                           show / clear /NRF/scan.log"));
+  Serial.println(F("  blescan [seconds]                                        BLE advertisement scan (built-in radio)"));
+  Serial.println(F("  blegatt <MAC>                                            list services + characteristics of a device"));
+  Serial.println(F("  blelog [clear]                                           show / clear /BLE/scan.log"));
+  Serial.println(F("  bleconnect <MAC>                                         connect (persistent across commands)"));
+  Serial.println(F("  bledisconnect                                            drop the active connection"));
+  Serial.println(F("  blestatus                                                connection / MTU / notif stream state"));
+  Serial.println(F("  bleread <svc_uuid> <char_uuid>                           read a characteristic (hex out)"));
+  Serial.println(F("  blewrite <svc_uuid> <char_uuid> <hex>                    write with response"));
+  Serial.println(F("  blewriten <svc_uuid> <char_uuid> <hex>                   write without response"));
+  Serial.println(F("  blesub <svc_uuid> <char_uuid>                            subscribe to notify/indicate (NOTIF lines)"));
+  Serial.println(F("  bleunsub <svc_uuid> <char_uuid>                          unsubscribe"));
+  Serial.println(F("  blemtu [new_mtu]                                         show or request a new MTU"));
   Serial.println(F("  reboot"));
   Serial.println(F("Transmitting / jamming RF may be regulated where you are - stay within the law."));
 }
@@ -419,6 +487,7 @@ static void cliHelp() {
 static void cliStatus() {
   bool sd_present = SD.cardType() != CARD_NONE;
   Serial.println(F("--- status ---"));
+  Serial.print(F("firmware_ver : ")); Serial.println(EVILCROW_FW_VERSION);
   Serial.print(F("uptime_s     : ")); Serial.println(millis() / 1000);
   Serial.print(F("cpu_mhz      : ")); Serial.println(getCpuFrequencyMhz());
   Serial.print(F("temperature  : ")); Serial.println(temperatureRead());
@@ -564,21 +633,7 @@ static void cliJammer(const String &line) {
   }
 
   frequency = f.toFloat();
-  int power_jammer = p.toInt(); //Set TxPower. The following settings are possible depending on the frequency band.  (-30  -20  -15  -10  -6    0    5    7    10   11   12)
-  
-  if (power_jammer != -30 && \
-     power_jammer != -20 && \
-     power_jammer != -15 && \
-     power_jammer != -6 && \
-     power_jammer != 0 && \
-     power_jammer != 5 &&
-     power_jammer != 7 && \
-     power_jammer != 10 && \
-     power_jammer != 11 && \
-     power_jammer != 12) {
-    Serial.println(F("ERR jammer: power outside of possible values : -30, -20, -15, -10, -6, 0, 5, 7, 10, 11, 12"));
-    return;     
-  }
+  int power_jammer = p.toInt();
 
   int moduleIndex = (tmp_module == "1") ? 0 : 1;
   int tx_pin = (tmp_module == "1") ? tx_pin1 : tx_pin2;
@@ -949,6 +1004,455 @@ static void cliLastBin(const String &line) {
   Serial.println(F("OK lastbin"));
 }
 
+// ============================================================================
+//  nRF24 receive-only channel scanner (requires soldered nRF24L01+ module)
+// ============================================================================
+
+// Initialize the nRF24 in pure listener mode: no pipes opened for read, TX
+// disabled, low-noise config. We only ever query carrier-detect / RPD.
+static bool nrfInit() {
+  if (nrfPresent) return true;
+  if (!nrf.begin()) return false;
+  if (!nrf.isChipConnected()) return false;
+  nrf.setAutoAck(false);
+  nrf.disableCRC();
+  nrf.setAddressWidth(2);
+  nrf.setPayloadSize(4);
+  nrf.setDataRate(RF24_2MBPS);
+  nrf.setPALevel(RF24_PA_MIN);    // RX-only; PA level affects only TX
+  nrf.stopListening();             // make sure TX path is idle
+  nrfPresent = true;
+  return true;
+}
+
+static void appendNrfLog(uint8_t ch, int hits) {
+  File fp = SD.open("/NRF/scan.log", FILE_APPEND);
+  if (!fp) {
+    SD.mkdir("/NRF");
+    fp = SD.open("/NRF/scan.log", FILE_APPEND);
+    if (!fp) return;
+  }
+  fp.print(millis()); fp.print(',');
+  fp.print(2400 + ch); fp.print("MHz,ch=");
+  fp.print(ch); fp.print(",hits=");
+  fp.println(hits);
+  fp.close();
+}
+
+// nrfscan [start] [end] [dwell_us] [passes]
+//   Sweep nRF24 channels start..end, dwelling dwell_us on each per pass,
+//   counting how many passes detected a carrier on each channel. Active
+//   channels are appended to /NRF/scan.log on the SD card.
+//   Defaults: 0..125, 200us, 40 passes.
+static void cliNrfScan(const String &line) {
+  if (!nrfInit()) {
+    Serial.println(F("ERR nrfscan: nRF24 not detected (check wiring/power)"));
+    return;
+  }
+  int chStart = tok(line, 1) != "" ? tok(line, 1).toInt() : 0;
+  int chEnd   = tok(line, 2) != "" ? tok(line, 2).toInt() : 125;
+  int dwell   = tok(line, 3) != "" ? tok(line, 3).toInt() : 200;
+  int passes  = tok(line, 4) != "" ? tok(line, 4).toInt() : 40;
+  if (chStart < 0) chStart = 0;
+  if (chEnd > 125) chEnd = 125;
+  if (chStart > chEnd) { Serial.println(F("ERR nrfscan: start > end")); return; }
+
+  int width = chEnd - chStart + 1;
+  static uint8_t hits[126];
+  for (int i = 0; i < width; i++) hits[i] = 0;
+
+  Serial.print(F("--- nrf scan ch ")); Serial.print(chStart);
+  Serial.print(F("..")); Serial.print(chEnd);
+  Serial.print(F(" dwell=")); Serial.print(dwell);
+  Serial.print(F("us passes=")); Serial.print(passes); Serial.println(F(" ---"));
+
+  for (int p = 0; p < passes; p++) {
+    for (int c = chStart; c <= chEnd; c++) {
+      nrf.setChannel(c);
+      nrf.startListening();
+      delayMicroseconds(dwell);
+      bool carrier = nrf.testRPD();    // received power detect
+      nrf.stopListening();
+      if (carrier && hits[c - chStart] < 255) hits[c - chStart]++;
+    }
+    // keep the serial responsive between passes
+    if ((p & 0x07) == 0) processSerial();
+  }
+
+  int active = 0;
+  for (int c = chStart; c <= chEnd; c++) {
+    uint8_t h = hits[c - chStart];
+    if (h == 0) continue;
+    active++;
+    Serial.print(F("  ch=")); Serial.print(c);
+    Serial.print(F(" (")); Serial.print(2400 + c); Serial.print(F(" MHz)  hits="));
+    Serial.print(h); Serial.print(F("/")); Serial.println(passes);
+    appendNrfLog(c, h);
+  }
+  Serial.print(F("OK nrfscan: ")); Serial.print(active); Serial.println(F(" active channel(s)"));
+}
+
+// nrflog                show the saved scan log
+// nrflog clear          erase it
+static void cliNrfLog(const String &line) {
+  String arg = tok(line, 1);
+  if (arg == "clear") {
+    if (SD.exists("/NRF/scan.log")) SD.remove("/NRF/scan.log");
+    Serial.println(F("OK nrflog: cleared"));
+    return;
+  }
+  File fp = SD.open("/NRF/scan.log", FILE_READ);
+  if (!fp) { Serial.println(F("(no log yet)")); Serial.println(F("OK nrflog")); return; }
+  Serial.println(F("--- /NRF/scan.log ---"));
+  while (fp.available()) Serial.write(fp.read());
+  fp.close();
+  Serial.println(F("OK nrflog"));
+}
+
+// ============================================================================
+//  BLE scanner (built-in ESP32 radio, no extra hardware)
+// ============================================================================
+
+static bool bleReady = false;
+
+static void bleEnsureInit() {
+  if (bleReady) return;
+  BLEDevice::init("EvilCrowRF-Scanner");
+  bleReady = true;
+}
+
+static void appendBleLog(const String &line) {
+  if (!SD.exists("/BLE")) SD.mkdir("/BLE");
+  File fp = SD.open("/BLE/scan.log", FILE_APPEND);
+  if (!fp) return;
+  fp.print(millis()); fp.print(',');
+  fp.println(line);
+  fp.close();
+}
+
+// blescan [seconds]   passive BLE advertisement scan, default 8s
+static void cliBleScan(const String &line) {
+  bleEnsureInit();
+  int secs = tok(line, 1) != "" ? tok(line, 1).toInt() : 8;
+  if (secs < 1) secs = 1;
+  if (secs > 60) secs = 60;
+
+  BLEScan *scan = BLEDevice::getScan();
+  scan->setActiveScan(true);
+  scan->setInterval(100);
+  scan->setWindow(99);
+
+  Serial.print(F("--- blescan ")); Serial.print(secs); Serial.println(F("s ---"));
+  BLEScanResults *results = scan->start(secs, false);
+  int n = results->getCount();
+  for (int i = 0; i < n; i++) {
+    BLEAdvertisedDevice d = results->getDevice(i);
+    String mac  = String(d.getAddress().toString().c_str());
+    String name = d.haveName() ? String(d.getName().c_str()) : String("no_name");
+    int    rssi = d.getRSSI();
+    String svcs = "";
+    if (d.haveServiceUUID()) {
+      for (int s = 0; s < d.getServiceUUIDCount(); s++) {
+        if (svcs.length()) svcs += "|";
+        svcs += String(d.getServiceUUID(s).toString().c_str());
+      }
+    }
+    Serial.print(F("  "));
+    Serial.print(mac); Serial.print(F("  rssi=")); Serial.print(rssi);
+    Serial.print(F("  name=")); Serial.print(name);
+    if (svcs.length()) { Serial.print(F("  svcs=")); Serial.print(svcs); }
+    Serial.println();
+
+    String row = mac + ",rssi=" + String(rssi) + ",name=" + name;
+    if (svcs.length()) row += ",svcs=" + svcs;
+    appendBleLog(row);
+  }
+  scan->clearResults();
+  Serial.print(F("OK blescan: ")); Serial.print(n); Serial.println(F(" device(s)"));
+}
+
+// blegatt <MAC>   connect once, list services + characteristics, then disconnect
+static void cliBleGatt(const String &line) {
+  bleEnsureInit();
+  String mac = tok(line, 1);
+  if (mac == "") { Serial.println(F("ERR blegatt: usage blegatt <MAC>")); return; }
+
+  // If a persistent connection is open to this peer already, reuse it.
+  // Otherwise open a transient client just for the enumeration.
+  bool transient = false;
+  BLEClient *client = nullptr;
+  if (bleClient && bleClient->isConnected() && bleConnectedMac == mac) {
+    client = bleClient;
+  } else {
+    client = BLEDevice::createClient();
+    transient = true;
+    Serial.print(F("--- gatt for ")); Serial.print(mac); Serial.println(F(" ---"));
+    BLEAddress addr(mac.c_str());
+    if (!client->connect(addr)) {
+      Serial.println(F("ERR blegatt: connect failed"));
+      delete client;
+      return;
+    }
+    // Let the GATTC task finish discovery before we walk the service map.
+    // Without this, iterating the std::map can race with population and
+    // trip an internal xQueueGenericSend assert in the BLE stack.
+    delay(800);
+  }
+
+  std::map<std::string, BLERemoteService*> *svcs = client->getServices();
+  int sCount = 0, cCount = 0;
+  if (svcs && !svcs->empty()) {
+    for (auto &kv : *svcs) {
+      if (!kv.second) continue;
+      sCount++;
+      Serial.print(F("  service ")); Serial.println(kv.first.c_str());
+
+      std::map<std::string, BLERemoteCharacteristic*> *chars =
+          kv.second->getCharacteristics();
+      if (!chars || chars->empty()) continue;
+      for (auto &ckv : *chars) {
+        BLERemoteCharacteristic *rc = ckv.second;
+        if (!rc) continue;
+        cCount++;
+        Serial.print(F("    char ")); Serial.print(ckv.first.c_str());
+        Serial.print(F("  props="));
+        if (rc->canRead())             Serial.print(F("R"));
+        if (rc->canWrite())            Serial.print(F("W"));
+        if (rc->canWriteNoResponse())  Serial.print(F("w"));
+        if (rc->canNotify())           Serial.print(F("N"));
+        if (rc->canIndicate())         Serial.print(F("I"));
+        Serial.println();
+      }
+    }
+  }
+
+  if (transient) {
+    if (client->isConnected()) client->disconnect();
+    delete client;
+  }
+
+  appendBleLog("gatt," + mac + ",services=" + String(sCount) + ",chars=" + String(cCount));
+  Serial.print(F("OK blegatt: ")); Serial.print(sCount);
+  Serial.print(F(" service(s), ")); Serial.print(cCount); Serial.println(F(" characteristic(s)"));
+}
+
+// blelog [clear]
+static void cliBleLog(const String &line) {
+  if (tok(line, 1) == "clear") {
+    if (SD.exists("/BLE/scan.log")) SD.remove("/BLE/scan.log");
+    Serial.println(F("OK blelog: cleared")); return;
+  }
+  File fp = SD.open("/BLE/scan.log", FILE_READ);
+  if (!fp) { Serial.println(F("(no log yet)")); Serial.println(F("OK blelog")); return; }
+  Serial.println(F("--- /BLE/scan.log ---"));
+  while (fp.available()) Serial.write(fp.read());
+  fp.close();
+  Serial.println(F("OK blelog"));
+}
+
+// ============================================================================
+//  BLE GATT client - persistent connection for protocol implementation
+// ============================================================================
+
+static void cliBleDisconnect() {
+  if (bleClient) {
+    if (bleClient->isConnected()) bleClient->disconnect();
+    delete bleClient;
+    bleClient = nullptr;
+  }
+  bleConnectedMac = "";
+  bleNotifyStream = false;
+  Serial.println(F("OK bledisconnect"));
+}
+
+// bleconnect <MAC>
+static void cliBleConnect(const String &line) {
+  bleEnsureInit();
+  String mac = tok(line, 1);
+  if (mac == "") { Serial.println(F("ERR bleconnect: usage bleconnect <MAC>")); return; }
+
+  if (bleClient) {
+    if (bleClient->isConnected()) bleClient->disconnect();
+    delete bleClient;
+    bleClient = nullptr;
+  }
+  bleClient = BLEDevice::createClient();
+  BLEAddress addr(mac.c_str());
+  if (!bleClient->connect(addr)) {
+    Serial.println(F("ERR bleconnect: connect failed"));
+    delete bleClient;
+    bleClient = nullptr;
+    return;
+  }
+  bleConnectedMac = mac;
+  Serial.print(F("OK bleconnect: ")); Serial.print(mac);
+  Serial.print(F("  mtu=")); Serial.println(bleClient->getMTU());
+}
+
+// Resolve service+characteristic UUIDs from the active connection. Returns
+// nullptr and prints ERR if not found.
+static BLERemoteCharacteristic* bleResolveChar(const String &svc, const String &chr) {
+  if (!bleClient || !bleClient->isConnected()) {
+    Serial.println(F("ERR not connected (use bleconnect first)"));
+    return nullptr;
+  }
+  BLERemoteService *rs = bleClient->getService(BLEUUID(svc.c_str()));
+  if (!rs) { Serial.println(F("ERR service not found")); return nullptr; }
+  BLERemoteCharacteristic *rc = rs->getCharacteristic(BLEUUID(chr.c_str()));
+  if (!rc) { Serial.println(F("ERR characteristic not found")); return nullptr; }
+  return rc;
+}
+
+static void printHexLine(const uint8_t *data, size_t len) {
+  for (size_t i = 0; i < len; i++) {
+    if (data[i] < 0x10) Serial.print('0');
+    Serial.print(data[i], HEX);
+  }
+}
+
+static int hexCharVal(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+  if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+  return -1;
+}
+
+// Parse hex string (with optional spaces / colons / 0x prefix) into bytes.
+// Returns number of bytes written, or -1 on parse error.
+static int parseHex(const String &s, uint8_t *out, size_t cap) {
+  size_t n = 0;
+  int hi = -1;
+  for (size_t i = 0; i < s.length(); i++) {
+    char c = s[i];
+    if (c == ' ' || c == ':' || c == '-' || c == ',') continue;
+    if (c == '0' && i + 1 < s.length() && (s[i+1] == 'x' || s[i+1] == 'X')) { i++; continue; }
+    int v = hexCharVal(c);
+    if (v < 0) return -1;
+    if (hi < 0) { hi = v; }
+    else {
+      if (n >= cap) return -1;
+      out[n++] = (uint8_t)((hi << 4) | v);
+      hi = -1;
+    }
+  }
+  if (hi >= 0) return -1;     // odd nibble count
+  return (int)n;
+}
+
+// bleread <service_uuid> <char_uuid>
+static void cliBleRead(const String &line) {
+  String svc = tok(line, 1), chr = tok(line, 2);
+  if (svc == "" || chr == "") {
+    Serial.println(F("ERR bleread: usage bleread <service_uuid> <char_uuid>"));
+    return;
+  }
+  BLERemoteCharacteristic *rc = bleResolveChar(svc, chr);
+  if (!rc) return;
+  if (!rc->canRead()) { Serial.println(F("ERR bleread: not readable")); return; }
+
+  String value = rc->readValue();
+  Serial.print(F("OK bleread: len=")); Serial.print(value.length());
+  Serial.print(F(" hex="));
+  printHexLine((const uint8_t*)value.c_str(), value.length());
+  Serial.println();
+}
+
+// blewrite <service_uuid> <char_uuid> <hex_bytes>      (write with response)
+// blewriten <service_uuid> <char_uuid> <hex_bytes>     (write without response)
+static void cliBleWriteImpl(const String &line, bool withResponse) {
+  String svc = tok(line, 1), chr = tok(line, 2);
+  String hex = restFrom(line, 3);
+  if (svc == "" || chr == "" || hex == "") {
+    Serial.println(F("ERR blewrite: usage blewrite[n] <service_uuid> <char_uuid> <hex_bytes>"));
+    return;
+  }
+  BLERemoteCharacteristic *rc = bleResolveChar(svc, chr);
+  if (!rc) return;
+  if (withResponse && !rc->canWrite()) { Serial.println(F("ERR blewrite: not writable")); return; }
+  if (!withResponse && !rc->canWriteNoResponse()) { Serial.println(F("ERR blewriten: not writable without response")); return; }
+
+  uint8_t buf[244];        // ATT_MTU - 3, max useful BLE payload
+  int n = parseHex(hex, buf, sizeof(buf));
+  if (n < 0) { Serial.println(F("ERR blewrite: bad hex (or too long)")); return; }
+
+  rc->writeValue(buf, (size_t)n, withResponse);
+  Serial.print(F("OK ")); Serial.print(withResponse ? F("blewrite") : F("blewriten"));
+  Serial.print(F(": wrote ")); Serial.print(n); Serial.println(F(" byte(s)"));
+}
+
+static void cliBleWrite(const String &line)  { cliBleWriteImpl(line, true); }
+static void cliBleWriteN(const String &line) { cliBleWriteImpl(line, false); }
+
+// blesub <service_uuid> <char_uuid>      subscribe to notifications/indications
+static void cliBleSub(const String &line) {
+  String svc = tok(line, 1), chr = tok(line, 2);
+  if (svc == "" || chr == "") {
+    Serial.println(F("ERR blesub: usage blesub <service_uuid> <char_uuid>"));
+    return;
+  }
+  BLERemoteCharacteristic *rc = bleResolveChar(svc, chr);
+  if (!rc) return;
+  if (!rc->canNotify() && !rc->canIndicate()) {
+    Serial.println(F("ERR blesub: characteristic does not notify/indicate"));
+    return;
+  }
+  rc->registerForNotify(bleNotifyCallback);
+  bleNotifyStream = true;
+  Serial.println(F("OK blesub: streaming notifications (NOTIF lines)"));
+}
+
+// bleunsub <service_uuid> <char_uuid>
+static void cliBleUnsub(const String &line) {
+  String svc = tok(line, 1), chr = tok(line, 2);
+  if (svc == "" || chr == "") {
+    Serial.println(F("ERR bleunsub: usage bleunsub <service_uuid> <char_uuid>"));
+    return;
+  }
+  BLERemoteCharacteristic *rc = bleResolveChar(svc, chr);
+  if (!rc) return;
+  rc->registerForNotify(nullptr);
+  Serial.println(F("OK bleunsub"));
+}
+
+// blemtu [new_mtu]   show or request a new MTU (server may cap it)
+static void cliBleMtu(const String &line) {
+  if (!bleClient || !bleClient->isConnected()) {
+    Serial.println(F("ERR blemtu: not connected"));
+    return;
+  }
+  String n = tok(line, 1);
+  if (n != "") {
+    uint16_t want = (uint16_t)n.toInt();
+    BLEDevice::setMTU(want);
+  }
+  Serial.print(F("OK blemtu: ")); Serial.println(bleClient->getMTU());
+}
+
+// blestatus
+static void cliBleStatus() {
+  Serial.print(F("ble_connected: "));
+  Serial.println((bleClient && bleClient->isConnected()) ? F("true") : F("false"));
+  if (bleClient && bleClient->isConnected()) {
+    Serial.print(F("ble_peer:      ")); Serial.println(bleConnectedMac);
+    Serial.print(F("ble_mtu:       ")); Serial.println(bleClient->getMTU());
+  }
+  Serial.print(F("ble_stream:    ")); Serial.println(bleNotifyStream ? F("on") : F("off"));
+}
+
+// Drain any queued notifications to the serial line. Called from loop().
+static void bleDrainNotifications() {
+  while (bleNotifTail != bleNotifHead) {
+    BleNotif *slot = (BleNotif*)&bleNotifQ[bleNotifTail];
+    Serial.print(F("NOTIF t=")); Serial.print(slot->ts);
+    Serial.print(F(" uuid=")); Serial.print(slot->uuid);
+    Serial.print(F(" len=")); Serial.print((unsigned)slot->len);
+    Serial.print(F(" hex="));
+    printHexLine(slot->data, slot->len);
+    Serial.println();
+    bleNotifTail = (bleNotifTail + 1) % BLE_NOTIF_QUEUE;
+  }
+}
+
 static void dispatch(String line) {
   line.trim();
   if (line.length() == 0) return;
@@ -974,6 +1478,20 @@ static void dispatch(String line) {
   else if (cmd == "subdel")             cliSubDel(line);
   else if (cmd == "txbin")              cliTxBin(line);
   else if (cmd == "lastbin")            cliLastBin(line);
+  else if (cmd == "nrfscan")            cliNrfScan(line);
+  else if (cmd == "nrflog")             cliNrfLog(line);
+  else if (cmd == "blescan")            cliBleScan(line);
+  else if (cmd == "blegatt")            cliBleGatt(line);
+  else if (cmd == "blelog")             cliBleLog(line);
+  else if (cmd == "bleconnect")         cliBleConnect(line);
+  else if (cmd == "bledisconnect")      cliBleDisconnect();
+  else if (cmd == "bleread")            cliBleRead(line);
+  else if (cmd == "blewrite")           cliBleWrite(line);
+  else if (cmd == "blewriten")          cliBleWriteN(line);
+  else if (cmd == "blesub")             cliBleSub(line);
+  else if (cmd == "bleunsub")           cliBleUnsub(line);
+  else if (cmd == "blemtu")             cliBleMtu(line);
+  else if (cmd == "blestatus")          cliBleStatus();
   else if (cmd == "reboot")             { Serial.println(F("OK reboot")); delay(150); ESP.restart(); }
   else { Serial.print(F("ERR unknown command: ")); Serial.println(cmd); Serial.println(F("type 'help'")); }
 }
@@ -1006,11 +1524,14 @@ void setup() {
   enableReceive();
 
   Serial.println();
-  Serial.println(F("Evil Crow RF V2 ready (serial mode). Type 'help'."));
+  Serial.print(F("Evil Crow RF V2 v"));
+  Serial.print(EVILCROW_FW_VERSION);
+  Serial.println(F(" (serial mode). Type 'help'."));
 }
 
 void loop() {
   processSerial();
+  bleDrainNotifications();
 
   if (raw_rx == "1") {
     if (checkReceived()) {

@@ -9,8 +9,7 @@
 <body>
 
   <div id="header-container">
-    <div id="header">
-      Vipper Zero | Version 00.01 | Battery 100%
+    <div id="header">Vipper Zero | Version 00.01
     </div>
   </div>
 
@@ -20,39 +19,48 @@
     </div>
     <div id="menu">
   
-      <div class="button-container" id="menuitem0" style="background-color: #f06901">
-        <button class="menu-button">SDR</button>
+      <div class="button-container" id="menuitem0" style="background-color: #06B6D4">
+        <button class="menu-button" onclick="setLocation('sdr.html')">SDR</button>
       </div>
 
       <div class="button-container" id="menuitem1">
         <button class="menu-button">Bluetooth</button>
-      </div>
-
+      </div>      
+      
       <div class="button-container" id="menuitem2">
-        <button class="menu-button">USB</button>
+        <button class="menu-button">2.4GHz</button>
       </div>
 
       <div class="button-container" id="menuitem3">
+        <button class="menu-button">USB</button>
+      </div>
+
+      <div class="button-container" id="menuitem4">
         <button class="menu-button">Settings</button>
       </div>
 
     </div>
   </div>
 
-  <div id="footer">
-    Pre-Release Version | Not production-ready
-  </div>
+  <div id="footer">Pre-Release Version | Not production-ready</div>
 
   <script type="text/javascript">
     var menu_selected = 0
-    var menu_locations = [ "sdr.html", "bluetooth.html", "usb.html", "settings.html"]
+    var menu_locations = [ "sdr/index.html", 
+    "bluetooth/index.html", 
+    "usb.html", 
+    "settings.html"]
+
+    function setLocation(location) {
+      window.location = location
+    }
 
     function menu_move(direction) {
-      var max_items = 3
-      // Because we have 4 items in the menu
+      var max_items = 4
+      // Because we have 5 items in the menu
 
       var selected_item = document.getElementById('menuitem'+menu_selected)
-      selected_item.style.backgroundColor = '#61573a'
+      selected_item.style.backgroundColor = '#34444a'
 
       if (direction === "UP") {
         menu_selected = (menu_selected > 0) ? menu_selected - 1 : max_items
@@ -60,7 +68,7 @@
         menu_selected = (menu_selected < max_items) ? menu_selected + 1 : 0
       }
       selected_item = document.getElementById('menuitem'+menu_selected)
-      selected_item.style.backgroundColor = '#f06901'
+      selected_item.style.backgroundColor = '#06B6D4'
     }
 
     document.addEventListener("gamepadconnected", function (event) {
@@ -113,7 +121,6 @@
         window.location = menu_locations[menu_selected]
       }
 
-      console.log("Button press", event)
     })
 
   </script>
