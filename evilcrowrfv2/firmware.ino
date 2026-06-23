@@ -32,6 +32,11 @@
 #define SERIAL_BAUD 115200
 #define EVILCROW_FW_VERSION "1.0.0"
 
+// Buttons and LED on the EC RF V2 board
+#define LED      32
+#define BUTTON1  34   // BLE enable (press at boot, or any time, to spin up Bluedroid)
+#define BUTTON2  35   // reserved
+
 // nRF24 wiring (you solder these to a free header on the V2)
 //   CE  -> GPIO 32     CSN -> GPIO 33
 //   SCK -> 14 (shared with CC1101)   MISO -> 12   MOSI -> 13
@@ -105,6 +110,7 @@ String raw_rx = "0";
 String jammer_tx = "0";
 String transmit;
 bool serialRxEcho = true;   // stream decoded RX frames over USB serial
+bool bleEnabled   = false;  // gated by BUTTON1 (BLE stack stays dormant until pressed)
 
 // nRF24 state (receive-only)
 RF24 nrf(NRF_CE_PIN, NRF_CSN_PIN);
@@ -468,7 +474,7 @@ static void cliHelp() {
   Serial.println(F("  lastbin [te_us]                                          show last RX as binary symbols"));
   Serial.println(F("  nrfscan [start] [end] [dwell_us] [passes]                nRF24 RX-only channel scan (needs module)"));
   Serial.println(F("  nrflog [clear]                                           show / clear /NRF/scan.log"));
-  Serial.println(F("  blescan [seconds]                                        BLE advertisement scan (built-in radio)"));
+  Serial.println(F("  blescan [seconds]                                        BLE advertisement scan (requires BUTTON1 to enable BLE)"));
   Serial.println(F("  blegatt <MAC>                                            list services + characteristics of a device"));
   Serial.println(F("  blelog [clear]                                           show / clear /BLE/scan.log"));
   Serial.println(F("  bleconnect <MAC>                                         connect (persistent across commands)"));
@@ -496,6 +502,7 @@ static void cliStatus() {
   Serial.print(F("sd_present   : ")); Serial.println(sd_present ? F("true") : F("false"));
   Serial.print(F("rx_active    : ")); Serial.println(raw_rx);
   Serial.print(F("jammer_active: ")); Serial.println(jammer_tx);
+  Serial.print(F("ble_enabled  : ")); Serial.println(bleEnabled ? F("true") : F("false"));
   Serial.print(F("serial_echo  : ")); Serial.println(serialRxEcho ? F("on") : F("off"));
 }
 
@@ -1113,10 +1120,21 @@ static void cliNrfLog(const String &line) {
 //  BLE scanner (built-in ESP32 radio, no extra hardware)
 // ============================================================================
 
-static bool bleReady = false;
+static bool bleReady   = false;
+// bleEnabled lives up at the top with the other top-level state flags
+// so cliStatus() (which is defined earlier in the file) can see it.
+
+static bool bleRequireEnabled() {
+  if (!bleEnabled) {
+    Serial.println(F("ERR ble: stack disabled - press BUTTON1 to enable"));
+    return false;
+  }
+  return true;
+}
 
 static void bleEnsureInit() {
   if (bleReady) return;
+  if (!bleEnabled) return;        // refuse to spin up Bluedroid unless the user enabled it
   BLEDevice::init("EvilCrowRF-Scanner");
   bleReady = true;
 }
@@ -1132,6 +1150,7 @@ static void appendBleLog(const String &line) {
 
 // blescan [seconds]   passive BLE advertisement scan, default 8s
 static void cliBleScan(const String &line) {
+  if (!bleRequireEnabled()) return;
   bleEnsureInit();
   int secs = tok(line, 1) != "" ? tok(line, 1).toInt() : 8;
   if (secs < 1) secs = 1;
@@ -1173,6 +1192,7 @@ static void cliBleScan(const String &line) {
 
 // blegatt <MAC>   connect once, list services + characteristics, then disconnect
 static void cliBleGatt(const String &line) {
+  if (!bleRequireEnabled()) return;
   bleEnsureInit();
   String mac = tok(line, 1);
   if (mac == "") { Serial.println(F("ERR blegatt: usage blegatt <MAC>")); return; }
@@ -1227,7 +1247,12 @@ static void cliBleGatt(const String &line) {
   }
 
   if (transient) {
+    // Disconnect cleanly, then let the BLE stack's housekeeping queues
+    // drain (CCCD writes, descriptor cleanup, etc.) before destroying
+    // the client. Skipping this trips an internal prvNotifyQueueSetContainer
+    // assert on peers with many characteristics.
     if (client->isConnected()) client->disconnect();
+    delay(500);
     delete client;
   }
 
@@ -1267,6 +1292,7 @@ static void cliBleDisconnect() {
 
 // bleconnect <MAC>
 static void cliBleConnect(const String &line) {
+  if (!bleRequireEnabled()) return;
   bleEnsureInit();
   String mac = tok(line, 1);
   if (mac == "") { Serial.println(F("ERR bleconnect: usage bleconnect <MAC>")); return; }
@@ -1514,6 +1540,13 @@ void setup() {
   Serial.begin(SERIAL_BAUD);
   delay(300);
 
+  // Buttons and LED. GPIO 34/35 are input-only and have no internal
+  // pull-ups - the V2 board has external 10k pull-ups on the button lines.
+  pinMode(LED,     OUTPUT);
+  pinMode(BUTTON1, INPUT);
+  pinMode(BUTTON2, INPUT);
+  digitalWrite(LED, LOW);
+
   // MicroSD (used for /logs.txt; gracefully no-ops if no card present)
   sdspi.begin(18, 19, 23, 22);
   SD.begin(22, sdspi);
@@ -1527,10 +1560,34 @@ void setup() {
   Serial.print(F("Evil Crow RF V2 v"));
   Serial.print(EVILCROW_FW_VERSION);
   Serial.println(F(" (serial mode). Type 'help'."));
+  Serial.println(F("BLE is OFF - press BUTTON1 to enable the Bluetooth stack."));
+}
+
+// Poll BUTTON1 with a tiny debounce. The first short press enables BLE
+// (Bluedroid spins up lazily on the next BLE command). LED on pin LED
+// lights when BLE is enabled. We never auto-disable - power-cycle / reboot
+// puts it back off.
+static void buttonPoll() {
+  static uint32_t lastChange = 0;
+  static int      lastState  = HIGH;
+  int s = digitalRead(BUTTON1);
+  uint32_t now = millis();
+  if (s != lastState && (now - lastChange) > 30) {
+    lastChange = now;
+    if (lastState == HIGH && s == LOW) {           // press edge
+      if (!bleEnabled) {
+        bleEnabled = true;
+        digitalWrite(LED, HIGH);
+        Serial.println(F("EVT button1: BLE enabled"));
+      }
+    }
+    lastState = s;
+  }
 }
 
 void loop() {
   processSerial();
+  buttonPoll();
   bleDrainNotifications();
 
   if (raw_rx == "1") {

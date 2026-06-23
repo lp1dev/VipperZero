@@ -9,8 +9,9 @@ int main(int argc, const char *argv[]) {
     lxb_css_stylesheet_t *css;
     net_init();
     debug_init();
-    document = html_to_element("index.html");
-    css = apply_css(document, "style.css");
+    //
+    document = html_to_element("html/index.html");
+    css = apply_css(document, "html/style.css");
     debug("Document parsed.", NULL);
     graph_init();
     debug("Graph init done, rendering.", NULL);

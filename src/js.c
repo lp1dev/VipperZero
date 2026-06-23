@@ -35,7 +35,7 @@ static duk_ret_t js_serial_send(duk_context *ctx) {
 
     data = (char *)duk_get_string(ctx, 0);
     sent = serial_send_line(data);
-    duk_pop(ctx);
+    // duk_pop(ctx);
     duk_push_int(ctx, sent);
     return (duk_ret_t) 1;
 }
@@ -48,13 +48,15 @@ static duk_ret_t js_serial_recv(duk_context *ctx) {
 
     timeout = duk_get_int(ctx, 0);
     received = serial_recv(buffer, SERIAL_BUFFER_SIZE, timeout);
-    duk_pop(ctx);
+    // duk_pop(ctx);
     
     if (received > 0) {
         if (received < SERIAL_BUFFER_SIZE) {
             buffer[received] = '\0';
         }
         duk_push_string(ctx, buffer);
+    } else {
+        duk_push_string(ctx, "");
     }
     return (duk_ret_t) 1;
 }

@@ -62,7 +62,6 @@ file(GLOB lexbor_SRC
 )
 
 add_executable(${PROJECT_NAME}
-  ../../src/main.c
   ../../src/renderer.c
   ../../src/helpers.c
   ../../src/adapters/element.c
@@ -78,8 +77,11 @@ add_executable(${PROJECT_NAME}
   ../../src/net/tcp_debugger.c
   ../../src/usb/keyboard_vita.c
   ../../src/audio/audio.c
+  ../../src/filesystem/fs.c
+	../../src/platform/platform_vita.c
   ./src/pi_serial.c
   ./src/js.c
+  ./src/vitter_main.c 
   ${lexbor_SRC}
 )
 
@@ -100,6 +102,7 @@ target_link_libraries(${PROJECT_NAME}
   SceAudio_stub
   SceDisplay_stub
   SceCtrl_stub
+  SceBt_stub
   SceCpuForDriver_stub
   SceSysmodule_stub
   SceGxm_stub
@@ -109,10 +112,13 @@ target_link_libraries(${PROJECT_NAME}
   SceHid_stub
   SceMotion_stub
   SceUsbSerial_stub
+  SceShellSvc_stub
+  taihen_stub
   hidkeyboard_stub_weak
+  usbserial_proxy_stub_weak
 )
 
-vita_create_self(${PROJECT_NAME}.self ${PROJECT_NAME})
+vita_create_self(${PROJECT_NAME}.self ${PROJECT_NAME} UNSAFE)
 
 # The FILE directive lets you add additional files to the VPK, the syntax is
 # FILE src_path dst_path_in_vpk. In this case, we add the LiveArea paths.

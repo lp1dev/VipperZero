@@ -13,8 +13,10 @@ SOURCES=../../src/renderer.c \
 	../../src/usb/keyboard_linux.c \
    	../../duktape/src/duktape.c \
    	../../duktape/extras/console/duk_console.c \
+	../../src/filesystem/fs.c \
+	../../src/platform/platform_linux.c \
 	./src/js.c \
-	./src/direct_serial.c \
+	./src/usb_serial.c \
 	./src/vitter_main.c \
 #	tinypy/modules/math/*.c \
 #	tinypy/modules/random/*.c \
