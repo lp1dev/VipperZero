@@ -1,26 +1,24 @@
-#ifndef SERIAL_H_
-#define SERIAL_H_
-
-#include <stddef.h>
-
-/* USB serial to a host (e.g. Raspberry Pi acting as USB host).
+/*
+ * serial.h - minimal blocking serial port API.
  *
- * Uses SceUsbSerial to make the Vita appear as a CDC-ACM serial device.
- * On Linux, the host will see /dev/ttyACM0 (or similar).
- *
- * Important: this uses UDCD. The hidkeyboard plugin must NOT be active
- * while pi_serial is running. Call hidkeyboard_user_stop() (or skip
- * keyboard_init() entirely) before calling pi_serial_init(). */
+ * Default device: "/dev/ttyUSB0", overridable at runtime via the
+ * EVILCROW_SERIAL_PORT environment variable, or at compile time with
+ *   -DSERIAL_DEVICE='"/dev/ttyACM0"'  -DSERIAL_BAUD=B115200
+ */
 
-#define OK              0
-#define ERR_START      -1
-#define ERR_SETUP      -2
-#define ERR_NOT_OPEN   -3
-#define ERR_INVALID    -4
-#define ERR_TIMEOUT    -5
-#define SERIAL_BUFFER_SIZE 2048
+#ifndef SERIAL_H
+#define SERIAL_H
 
-/* Lifecycle */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Suggested buffer size for callers reading lines / responses. Override by
+ * defining it before including this header if you need a different size. */
+#ifndef SERIAL_BUFFER_SIZE
+#define SERIAL_BUFFER_SIZE 4096
+#endif
+
 int serial_init(void);
 int serial_close(void);
 
@@ -38,5 +36,30 @@ int serial_recv(void *buf, unsigned int maxlen, int timeout_ms);
 /* Line-oriented helpers (text protocol). */
 int serial_send_line(const char *str);
 int serial_recv_line(char *buf, unsigned int maxlen, int timeout_ms);
+
+/* Discard all pending input (kernel queue + internal buffer). Call before
+ * sending a command whose reply you intend to read, to avoid reading
+ * leftover bytes from a previous response / boot banner / async output. */
+void serial_flush_input(void);
+
+/* Send a command and collect its full reply, resync-safe.
+ *
+ * Flushes input, sends "<cmd>\n", then reads lines until one starts with
+ * "OK" or "ERR" (the firmware terminators), accumulating them into `reply`
+ * (newline-separated, NUL-terminated, terminator line included).
+ *
+ *   overall_timeout_ms : upper bound on the whole exchange (-1 = no bound)
+ *   line_idle_ms       : per-line idle allowance; a quiet gap this long
+ *                        after some reply has arrived ends the read. Use a
+ *                        generous value (e.g. 1500) for slow / low-power
+ *                        peers that trickle bytes.
+ *
+ * Returns reply length (>=0), -1 on I/O error, -2 on timeout. */
+int serial_command(const char *cmd, char *reply, unsigned int reply_cap,
+                   int overall_timeout_ms, int line_idle_ms);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SERIAL_H */
