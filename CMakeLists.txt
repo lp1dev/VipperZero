@@ -78,7 +78,7 @@ add_executable(${PROJECT_NAME}
   ../../src/usb/keyboard_vita.c
   ../../src/audio/audio.c
   ../../src/filesystem/fs.c
-	../../src/platform/platform_vita.c
+  ../../src/platform/platform_vita.c
   ./src/pi_serial.c
   ./src/js.c
   ./src/vitter_main.c 

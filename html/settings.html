@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Vipper Zero</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <div id="header-container">
+    <div id="header">Vipper Zero | Version 00.01
+    </div>
+  </div>
+
+  <div id="container" class="inline">
+    <div id="menu">
+  
+    </div>
+  </div>
+
+  <div id="footer">Pre-Release Version | Not production-ready</div>
+
+  <script type="text/javascript">
+    var alpha = "abcdefghijklmnopqrstuvwxyz"
+    var kb_buffer = ""
+    var readInputCallback = undefined
+    var settings = undefined
+    var waiting_for_input = 0
+    var menu_selected = 0
+    var settings_default = {
+      "Setting1": true,
+      "Setting2": "value",
+      "Settings3": 300
+    }
+
+    function setLocation(location) {
+      window.location = location
+    }
+
+    function readInputText(id, number_only) {
+      document.getElementById('input'+id).style.color = '#2082A6'
+      document.getElementById('input'+id).innerText = '|'
+      waiting_for_input = id
+      readInputCallback = function(cancelled) {
+
+        document.getElementById('input'+id).innerText = kb_buffer
+        document.getElementById('input'+id).style.color = '#000000'
+        if (cancelled) {
+          document.getElementById('input'+id).innerText = "" + settings[Object.keys(settings_default)[id]]
+        } else {
+          quark_debug("NUMBER ONLY IS ", number_only)
+          if (number_only) {
+            if (!isNaN(parseInt(kb_buffer))) {
+              settings[Object.keys(settings_default)[id]] = kb_buffer
+              document.getElementById('input'+id).innerText = kb_buffer
+            } else {
+              document.getElementById('input'+id).innerText = "" + settings[Object.keys(settings_default)[id]]
+            }
+          } else {
+            settings[Object.keys(settings_default)[id]] = kb_buffer
+            document.getElementById('input'+id).innerText = kb_buffer
+          }
+          quark_writefile(JSON.stringify(settings), 'settings.json')
+        }
+        waiting_for_input = 0
+        kb_buffer = ""
+      }
+    }
+
+
+    function setValue(id) {
+      var key = Object.keys(settings_default)[id]
+      console.log(typeof(settings_default[key]))
+      if (typeof(settings_default[key]) === "boolean") {
+        settings[key] = !settings[key]
+      } else if (typeof(settings_default[key]) === "string" || typeof(settings_default[key] == "number")) {
+        if (quark_get_platform() === platforms.VITA) {
+          settings[key] = prompt(key, settings_default[key])
+        } else if (quark_get_platform() === platforms.LINUX) {
+          readInputText(id, typeof(settings_default[key]) === "number")
+        }
+      }
+      if (waiting_for_input == 0) {
+        quark_writefile(JSON.stringify(settings), 'settings.json')
+        menu_build(settings)
+      }
+    }
+
+    function menu_build(items) {
+      var menu = document.getElementById('menu')
+      var menu_elements = ""
+      // Creating button containers
+      for (var i = 0; i < Object.keys(items).length; i++) {
+          menu_elements += '<div class="setting-container" '
+          menu_elements +=  'id="menuitem' 
+          menu_elements += i 
+
+        // if (i == 0) {
+        //    menu_elements += '" style="background-color: #06B6D4"></div>'
+        // } else {
+        // }
+        menu_elements += '"></div>'
+
+      }
+      menu.innerHTML = menu_elements
+      console.log('menu_elements', menu.innerHTML)
+
+      // Creating buttons
+      for (var i = 0; i < Object.keys(items).length; i++) {
+          var button = ""
+          button += '<div class="setting-label">' + Object.keys(items)[i] + '</div>'
+          button += '<div class="input" id="input' + i + 
+          '" onclick="setValue(' + i + ')">' + 
+          items[Object.keys(items)[i]] + '</div>'
+          console.log('button is '+button)
+          document.getElementById('menuitem'+i).innerHTML = button
+      }
+    }
+
+    function menu_move(direction) {
+      var max_items = Object.keys(menu_items).length - 1
+      // Because we have 5 items in the menu
+
+      var selected_item = document.getElementById('menuitem'+menu_selected)
+      selected_item.style.backgroundColor = '#34444a'
+
+      if (direction === "UP") {
+        menu_selected = (menu_selected > 0) ? menu_selected - 1 : max_items
+      } else {
+        menu_selected = (menu_selected < max_items) ? menu_selected + 1 : 0
+      }
+      selected_item = document.getElementById('menuitem'+menu_selected)
+      selected_item.style.backgroundColor = '#06B6D4'
+    }
+
+    document.addEventListener("gamepadconnected", function (event) {
+      navigator.getGamepads()
+    })
+
+    document.addEventListener('keydown', function (event) {
+      console.log("Key pressed", event)
+      if (waiting_for_input > 0) {
+        if (event.code >= 97 && event.code <= 122) {
+          kb_buffer += alpha[event.code - 97]
+          document.getElementById('input'+waiting_for_input).innerText = kb_buffer
+        } else if (event.code >= 48 && event.code <= 57) {
+          kb_buffer += ("" + event.code - 48)
+          document.getElementById('input'+waiting_for_input).innerText = kb_buffer
+        } else if (event.code == 13) {
+          readInputCallback(false)
+        } else if (event.code == 27) {
+          readInputCallback(true)
+        }
+        return
+      }
+
+      if (event.code === 1073741906) {
+        menu_move("UP")
+      } else if (event.code === 1073741905) {
+        menu_move("DOWN")
+      } else if (event.code ===  13) { // Enter
+        window.location = menu_items[Object.keys(menu_items)[menu_selected]]
+      } else if (event.code === 27) {
+        window.location = "./html/index.html"
+      }
+    })
+
+    document.addEventListener('button_press', function (event) {
+      if (gamepad.mapping[event.code] === "DPAD_UP") {
+        menu_move("UP")
+      } else if (gamepad.mapping[event.code] === "DPAD_DOWN") {
+        menu_move("DOWN")
+      } else if (gamepad.mapping[event.code] == "X") {
+        window.location = menu_items[Object.keys(menu_items)[menu_selected]]
+      }
+
+    })
+
+    function init_settings() {
+      settings = {}
+      json_settings = quark_readfile('settings.json')
+      if (json_settings && json_settings.length && json_settings.trim()[0] == '{') {
+        json_settings = JSON.parse(json_settings)
+        for (var i = 0; i < Object.keys(settings_default).length; i++) {
+          var key = Object.keys(settings_default)[i]
+          console.log('Setting default ' + key)
+          if (typeof(json_settings[key]) == typeof(settings_default[key])) {
+            settings[key] = json_settings[key]
+          } else {
+            settings[key] = settings_default[key]
+          }
+          console.log(settings)
+        }
+      } else {
+        console.log("Settings: Invalid settings.json file, trying to create a new one")
+        quark_writefile(JSON.stringify(settings_default), "settings.json")
+        settings = settings_default
+      }
+      menu_build(settings)
+    }
+
+    init_settings()
+
+  </script>
+
+</body>
+</html>

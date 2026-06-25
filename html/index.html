@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Vipper Zero</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <div id="header-container">
+    <div id="header">Vipper Zero | Version 00.01
+    </div>
+  </div>
+
+  <div id="container" class="inline">
+    <div id="vipper">
+      <p id="avatar-status">Psssssssssssss</p>
+      <img id="avatar" src="html/images/avatar.png"/>
+      <!-- //TODO: Fix this image that isn't loading -->
+    </div>
+    <div id="menu">
+  
+    </div>
+  </div>
+
+  <div id="footer">Pre-Release Version | Not production-ready</div>
+
+  <script type="text/javascript">
+    var platform = quark_get_platform()
+    var menu_selected = 0
+
+    var menu_items = {
+      "Sub-GHZ": "./html/sdr/index.html",
+      "Bluetooth": "./html/bluetooth/index.html",
+      "USB": "./html/usb/index.html",
+      "Network": "./html/network/index.html",
+      "Settings": "./html/settings.html"
+    }
+
+    function setLocation(location) {
+      window.location = location
+    }
+
+    function menu_build(items) {
+      var menu = document.getElementById('menu')
+      var menu_elements = ""
+      // Creating button containers
+      for (var i = 0; i < Object.keys(items).length; i++) {
+          menu_elements += '<div class="button-container" '
+          menu_elements +=  'id="menuitem' 
+          menu_elements += i 
+
+        if (i == 0) {
+           menu_elements += '" style="background-color: #06B6D4"></div>'
+        } else {
+          menu_elements += '"></div>'
+        }
+      }
+      menu.innerHTML = menu_elements
+      console.log('menu_elements', menu.innerHTML)
+
+      // Creating buttons
+      for (var i = 0; i < Object.keys(items).length; i++) {
+          var button = ""
+          button += '<button class="menu-button" '
+          button += 'onclick="setLocation(\'' + items[Object.keys(items)[i]] + '\')">'
+          button += Object.keys(items)[i] + '</button>'
+          console.log('button is '+button)
+          document.getElementById('menuitem'+i).innerHTML = button
+      }
+    }
+
+    function menu_move(direction) {
+      var max_items = Object.keys(menu_items).length - 1
+      // Because we have 5 items in the menu
+
+      var selected_item = document.getElementById('menuitem'+menu_selected)
+      selected_item.style.backgroundColor = '#34444a'
+
+      if (direction === "UP") {
+        menu_selected = (menu_selected > 0) ? menu_selected - 1 : max_items
+      } else {
+        menu_selected = (menu_selected < max_items) ? menu_selected + 1 : 0
+      }
+      selected_item = document.getElementById('menuitem'+menu_selected)
+      selected_item.style.backgroundColor = '#06B6D4'
+    }
+
+    document.addEventListener("gamepadconnected", function (event) {
+      navigator.getGamepads()
+      // To initialize the gamepad
+    })
+
+    document.addEventListener('keydown', function (event) {
+      console.log("Key pressed", event)
+      if (event.code === 1073741906) {
+        menu_move("UP")
+      } else if (event.code === 1073741905) {
+        menu_move("DOWN")
+      } else if (event.code ===  13) { // Enter
+        window.location = menu_items[Object.keys(menu_items)[menu_selected]]
+      }
+    })
+
+    document.addEventListener('button_press', function (event) {
+      // The "button_press" event is not a classic JS event
+      // but it is a custom quark optimization for the non-existent gamepad
+      // button press event which usually requires a setTimeout +
+      // polling of all the gamepads that is done in JS.
+      if (gamepad.mapping[event.code] === "DPAD_UP") {
+        menu_move("UP")
+      } else if (gamepad.mapping[event.code] === "DPAD_DOWN") {
+        menu_move("DOWN")
+      } else if (gamepad.mapping[event.code] == "X") {
+        window.location = menu_items[Object.keys(menu_items)[menu_selected]]
+      }
+
+    })
+
+    console.log("Vitter Zero Running on " + (platform == platforms.LINUX ? "Linux" : "PS Vita"))
+    if (platform == platforms.LINUX) {
+      // delete menu_items.USB
+      // TODO: Uncomment to disallow access to USB gadget mode 
+      // on Linux because it is not supported ATM
+    }
+    menu_build(menu_items)
+
+  </script>
+
+</body>
+</html>

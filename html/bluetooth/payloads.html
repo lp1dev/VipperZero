@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Vipper Zero</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <div id="header-container">
+    <div id="header">Vipper Zero | Version 00.01 </div>
+  </div>
+  <div id="notification" style="color: #01EFAC">◉ serial is connected</div>
+
+  <div id="container-small" class="inline">
+    <div id="menu">
+    </div>
+  </div>
+
+
+  <div id="footer">◯ : Run Scan | □ : Enumerate Services/Characteristics | △ : Back </div>
+    <div id="script-loader"></div>
+
+  <script type="text/javascript">
+    // Navigation
+    var page = 0
+    var payloads = []
+    var displayed = []
+    var menu_selected = 0
+    var max_menu_items = 8 // In this menu we can only display 8 items at a time
+    var max_lines = 10
+
+    function draw_menu(items) {
+      var new_content = '<div id="files-list"></div>'
+      displayed = items
+      menu_selected = 0
+
+      document.getElementById("menu").innerHTML = new_content
+      new_content = ""
+      for (var i = 0; i < payloads.length; i++) {
+        new_content += '<div class="file-item" id="menuitem'
+        new_content += i + '">' + items[i] + "</div>"
+      }
+      document.getElementById("files-list").innerHTML = new_content + "</div>"
+    }
+
+    function exec_payload(filename) {
+      var js_contents = quark_readfile("./payloads/bluetooth/" + filename)
+      document.getElementById('menu').innerHTML = '<div id="term-output"></div>'
+      document.getElementById('term-output').innerText = 'Running ' + filename + '...\n'
+      console.log('Set term output')
+
+      setTimeout(function() {
+          document.getElementById("script-loader").innerHTML = "<script>" + js_contents + "<\/script>"
+      }, 1000)
+      
+      setTimeout(function() {
+        document.getElementById("script-loader").innerHTML = ""
+      }, 2000)
+
+    }
+
+    function menu_select() {
+      exec_payload(displayed[menu_selected])
+    }
+
+    function menu_move(direction) {
+      if (displayed.length == 0) {
+        return;
+      }
+      var selected_item = document.getElementById('menuitem' + menu_selected)
+      selected_item.style.backgroundColor = '#2c2c2d'
+
+
+      if (direction === "DOWN") {
+        if (menu_selected >= displayed.length - 1) {
+          if (page < ((payloads.length / max_menu_items) | 0)) {
+            page++
+          } else {
+            page = 0
+          }
+          draw_menu(payloads.slice(page * max_menu_items, (page + 1) * max_menu_items))
+          menu_selected = 0
+        } else {
+          menu_selected++
+        }
+      } else {
+        if (menu_selected <= 0) {
+          if (page > 0) {
+            page--
+          } else if (page <= 0) {
+            page = (payloads.length / max_menu_items) | 0
+          }
+          draw_menu(payloads.slice(page * max_menu_items, (page + 1) * max_menu_items))
+          menu_selected = page <= 0 ? (displayed.length - 1) : 0
+        } else {
+          menu_selected--
+        }
+      }
+      selected_item = document.getElementById('menuitem' + menu_selected)
+      selected_item.style.backgroundColor = '#06B6D4'
+    }
+
+
+    document.addEventListener('keydown', function (event) {
+      console.log("Key pressed", event)
+      if (event.code === 1073741906) {
+        menu_move("UP")
+      } else if (event.code === 1073741905) {
+        menu_move("DOWN")
+      } else if (event.code === 27) {
+        var term_output = document.getElementById('term-output')
+        if (term_output) {
+          draw_menu(payloads)
+          document.getElementById('menuitem0').style.backgroundColor = '#06B6D4'
+        } else {
+          serial_close()
+          window.location = "./html/bluetooth/index.html"
+        }
+      } else if (event.code === 13) {
+        menu_select()
+      } else if (event.code === 120) {
+      } else if (event.code === 122) {
+      }
+    })
+
+    document.addEventListener("gamepadconnected", function (event) {
+      navigator.getGamepads()
+      // To initialize the gamepad
+    })
+
+    document.addEventListener('button_press', function (event) {
+      // The "button_press" event is not a classic JS event
+      // but it is a custom quark optimization for the non-existent gamepad
+      // button press event which usually requires a setTimeout +
+      // polling of all the gamepads that is done in JS.
+      if (gamepad.mapping[event.code] === "DPAD_UP") {
+        menu_move("UP")
+      } else if (gamepad.mapping[event.code] === "DPAD_DOWN") {
+        menu_move("DOWN")
+      } else if (gamepad.mapping[event.code] == "TRIANGLE") {
+        serial_close()
+        window.location = "sdr.html"
+      } else if (gamepad.mapping[event.code] == "X") {
+        menu_select()
+      } else if (gamepad.mapping[event.code] == "SQUARE") {
+      } else if (gamepad.mapping[event.code] == "CIRCLE") {
+      }
+
+    })
+
+    // bt_scan(15)
+    // document.getElementById('menuitem'+menu_selected).style.backgroundColor = '#06B6D4'
+
+  function init() {
+      var dirs = quark_listdir("./payloads/bluetooth")
+      for (var i = 0; i < dirs.length; i++) {
+        if (dirs[i].includes(".js")) {
+          console.log(dirs[i])
+          payloads.push(dirs[i])
+        }
+      }
+      if (payloads.length) {
+        draw_menu(payloads)
+        document.getElementById('menuitem0').style.backgroundColor = '#06B6D4'
+      } else {
+        document.getElementById("menu").innerHTML = "<div id='error'>Add .js files to ./payloads/bluetooth.</div>"
+      }
+    }
+
+    init()
+
+    // document.getElementById('menu').innerHTML = "<script>console.log('PAYLOAD EXECUTED')<\/script>"
+
+    </script>
+
+</body>
+
+</html>

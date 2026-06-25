@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Vipper Zero</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <div id="header-container">
+    <div id="header">Vipper Zero | Version 00.01 </div>
+  </div>
+
+  <div id="container" class="inline">
+    <div id="menu">
+    </div>
+
+  </div>
+
+
+  <div id="footer"> × : Run  |  △ : Back </div>
+
+  <script type="text/javascript">
+    // Navigation
+    var page = 0
+    var payloads = []
+    var displayed = []
+    var menu_selected = 0
+    var max_menu_items = 8 // In this menu we can only display 8 items at a time
+    var ducky = {
+      "default_delay": 100,
+      "last_input": undefined
+    }
+
+
+    function kb_send(data, timeout) {
+      console.log("BadUSB:: Sending "+data)
+      ducky.last_input = data
+
+      setTimeout(function() {
+        if (isNaN(data)) {
+          keyboard_send_string(data)
+        } else if (Array.isArray(data)) {
+          keyboard_send_key(data[0], keyboard.HID[data[1]])
+        } else {
+          keyboard_send_key(0, data)
+        }
+      }, timeout)
+    }
+
+    function parse_exec_duckyscript(script) {
+      var lines = script.split('\n')
+
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim()
+        //
+        if (line.slice(0, 3) == "REM") {
+          document.getElementById('term-output').innerText += line.slice(4) + '\n'
+        } else if (line.slice(0, 5) == "DELAY") {
+          var time = line.slice(6).trim()
+          console.log("Waiting for " +time)
+
+          if (parseInt(time) != NaN) {
+              setTimeout(function() {
+                parse_exec_duckyscript(lines.slice(i).join('\n'))
+              }, parseInt(time))
+          }
+        } else if (line.slice(0, 6) == "STRING") {
+          kb_send(line.slice(7), ducky.default_delay)
+        } else if (line.slice(0, 5) == "ENTER") {
+          kb_send("ENT", ducky.default_delay)
+        } else if (line.slice(0, 3) == "GUI") {
+          if (line.trim().length == 3) {
+            kb_send(keyboard.HID.LMETA_KEY, ducky.default_delay)
+          } else {
+            kb_send([keyboard.HID.LMETA_KEY, line.slice(4).trim()[0]], ducky.default_delay)
+          }
+        } else if (line[0] == "F" && line.length < 4) {
+          kb_send(line.trim(), ducky.default_delay)
+        } else if (line.slice(0, 6) == "REPEAT") {
+          var interval = ducky.default_delay
+          var repetitions = parseInt(line.slice(7).trim())
+          
+          if (repetitions == NaN) {
+            console.log("Error: Invalid repeat input specified, not a number.")
+            continue
+          }
+
+          for (var j = 0; j < repetitions; j++) {
+            kb_send(ducky.last_input, interval)
+            interval += ducky.default_delay
+          }
+        }
+      }
+    }
+
+    function load_payload(id) {
+        var file_contents = quark_readfile("./payloads/badusb/" + payloads[id])
+        document.getElementById('menu').innerHTML = '<div id="term-output"></div>'
+        document.getElementById('term-output').innerText = ''
+        parse_exec_duckyscript(file_contents)
+        displayed = []
+    }
+
+    function draw_menu(items) {
+      var new_content = '<div id="files-list"></div>'
+      displayed = items
+      menu_selected = 0
+
+      document.getElementById("menu").innerHTML = new_content
+      new_content = ""
+      for (var i = 0; i < payloads.length; i++) {
+        new_content += '<div class="file-item" id="menuitem'
+        new_content += i + '">' + items[i] + "</div>"
+      }
+      document.getElementById("files-list").innerHTML = new_content + "</div>"
+    }
+
+    function menu_move(direction) {
+      if (displayed.length == 0) {
+        return
+      }
+  
+      var selected_item = document.getElementById('menuitem' + menu_selected)
+      selected_item.style.backgroundColor = '#2c2c2d'
+
+      if (direction === "DOWN") {
+        if (menu_selected >= displayed.length - 1) {
+          if (page < ((payloads.length / max_menu_items) | 0) - 1) {
+            page++
+          } else {
+            page = 0
+          }
+          draw_menu(payloads.slice(page * max_menu_items, (page + 1) * max_menu_items))
+          menu_selected = 0
+        } else {
+          menu_selected++
+        }
+      } else {
+        if (menu_selected <= 0) {
+          if (page > 0) {
+            page--
+          } else if (page < 0) {
+            page = ((payloads.length / max_menu_items) | 0) - 1
+          } 
+          draw_menu(payloads.slice(page * max_menu_items, (page + 1) * max_menu_items))
+          menu_selected = page <= 0 ? (displayed.length - 1) : 0
+          menu_selected < 0 ? menu_selected++ : menu_selected
+          console.log('displayed_length' + displayed.length)
+          console.log('menu_selected is '+menu_selected)
+          console.log('payloads')
+          console.log(payloads.slice(page * max_menu_items, (page + 1) * max_menu_items))
+        } else {
+          menu_selected = menu_selected > 0 ? menu_selected - 1 : menu_selected
+        }
+      }
+      console.log(displayed)
+      selected_item = document.getElementById('menuitem' + menu_selected)
+      selected_item.style.backgroundColor = '#06B6D4'
+    }
+
+    document.addEventListener('keydown', function (event) {
+      console.log("Key pressed", event)
+      if (event.code === 1073741906) {
+        menu_move("UP")
+      } else if (event.code === 1073741905) {
+        menu_move("DOWN")
+      } else if (event.code === 27) {
+        if (displayed.length > 0 || payloads.length == 0) {
+          keyboard_shutdown()
+          window.location = "./html/index.html"
+        } else {
+          draw_menu(payloads)
+        }
+      } else if (event.code == 13) {
+        load_payload(menu_selected)
+      }
+    })
+
+    document.addEventListener("gamepadconnected", function (event) {
+      navigator.getGamepads()
+      // To initialize the gamepad
+    })
+
+    document.addEventListener('button_press', function (event) {
+      // The "button_press" event is not a classic JS event
+      // but it is a custom quark optimization for the non-existent gamepad
+      // button press event which usually requires a setTimeout +
+      // polling of all the gamepads that is done in JS.
+      if (gamepad.mapping[event.code] === "DPAD_UP") {
+        menu_move("UP")
+      } else if (gamepad.mapping[event.code] === "DPAD_DOWN") {
+        menu_move("DOWN")
+      } else if (gamepad.mapping[event.code] == "TRIANGLE") {
+        keyboard_shutdown()
+        window.location = "./html/index.html"
+      } else if (gamepad.mapping[event.code] == "X") {
+        load_payload(menu_selected)
+      }
+
+    })
+
+    function init() {
+      var platform = quark_get_platform()
+      if (platform == platforms.VITA) {
+        keyboard_init()
+      }
+      var dirs = quark_listdir("./payloads/badusb")
+      for (var i = 0; i < dirs.length; i++) {
+        if (dirs[i].includes(".txt")) {
+          payloads.push(dirs[i])
+        }
+      }
+      if (payloads.length) {
+        draw_menu(payloads)
+        document.getElementById('menuitem0').style.backgroundColor = '#06B6D4'
+      } else {
+        document.getElementById("menu").innerHTML = "<div id='error'>Add .txt duckyscript files to ./payloads/badusb.</div>"
+      }
+    }
+
+    init()
+
+  </script>
+
+</body>
+
+</html>

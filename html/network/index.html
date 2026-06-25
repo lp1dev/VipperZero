@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Vipper Zero</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+    <div id="header-container">
+        <div id="header">Vipper Zero | Version 00.01 </div>
+    </div>
+    <div id="notification"></div>
+
+    <div id="container-small" class="inline">
+        <div id="menu">
+
+            <div class="button-container" id="menuitem0" style="background-color: #06B6D4">
+                <button id="hosts-button" onclick="scan_hosts()" class="menu-button">Hosts Scan (quiet)</button>
+            </div>
+<!-- 
+            <div class="button-container" id="menuitem1">
+                <button id="ports-button" onclick="scan_ports()" class="menu-button">TCP Ports Scan (quick)</button>
+            </div> -->
+
+        </div>
+
+    </div>
+
+
+    <div id="footer">◯ : Change TCP Scan Type | SELECT : Change Hosts Scan Type | △ : Back | □ : Reload </div>
+
+    <script type="text/javascript">
+        // Navigation
+        var locations = ["./html/bluetooth/scan.html"]
+        var menu_selected = 0
+        var is_connected = false
+
+        // Scan parameters
+        var scanning = false
+        var device_info = undefined
+        var hosts_scan_selected = 'quiet'
+        var ports_scan_selected = 'quick'
+        var ports_scan_types = ["quick", "thorough", "complete"]
+        var hosts_scan_types = {
+            "quiet": 100000,
+            "agressive": 50000,
+            "brutal": 10000
+        }
+        var is_connected = false
+
+        function menu_select() {
+            if (is_connected && !scanning) {
+
+            }
+        }
+
+        function decimalToIpv4(decimal) {
+            var octet1 = (decimal >>> 24) & 0xFF; // First octet (most significant 8 bits)
+            var octet2 = (decimal >>> 16) & 0xFF; // Second octet
+            var octet3 = (decimal >>> 8) & 0xFF;  // Third octet
+            var octet4 = decimal & 0xFF;         // Fourth octet (least significant 8 bits)
+            return octet1 + "." + octet2 + "." + octet3 + "." + octet4
+        }
+
+        function ipv4ToDecimal(ipv4) {
+            var octets = ipv4.split('.')
+            var octet = octets.map(Number);
+            var decimal = (octet[0] << 24) | (octet[1] << 16) | (octet[2] << 8) | octet[3];
+            return decimal;
+        }
+
+        function enumerateIpAddresses(gateway, netmask) {
+            var gatewayDecimal = ipv4ToDecimal(gateway);
+            var netmaskDecimal = ipv4ToDecimal(netmask);
+
+            var networkAddress = gatewayDecimal & netmaskDecimal;
+            var broadcastAddress = networkAddress | (~netmaskDecimal & 0xFFFFFFFF);
+
+            var ipAddresses = [];
+            for (var i = networkAddress + 1; i < broadcastAddress; i++) {
+                ipAddresses.push(decimalToIpv4(i));
+            }
+
+            return ipAddresses;
+        }
+
+
+        function scan_hosts() {
+            var gw = device_info.gateway
+            var netmask = device_info.netmask
+            // Debug overrides
+            // gw = "192.168.128.1"
+            // netmask = "255.255.254.0"
+            //
+
+            scanning = true
+            var candidates = enumerateIpAddresses(gw, netmask)
+            var duration = (candidates.length * hosts_scan_types[hosts_scan_selected]) / 1000000
+            var html = ''
+            html += "Scanning " + candidates.length + " hosts...\n"
+            html += "This should take about " + duration + " seconds"
+            html += "The app might seem unresponsive during the scan."
+
+            document.getElementById('menu').innerHTML = html
+
+            setTimeout(function () {
+                hosts = []
+                candidates.forEach(
+                    function (ip) {
+                        var socket = new Socket(ip, 80)
+                        var ret = socket.ping(hosts_scan_types[hosts_scan_selected])
+                        socket.close()
+                        if (ret >= 0 || ret == -6) { // Either a RST or a SYN+ACK 
+                            // quark_debug("Host is validated as up " + ip)
+                            hosts.push(ip)
+                        }
+                    }
+                )
+                // menu_create_items(hosts)
+                quark_debug(JSON.stringify(hosts))
+                // document.getElementById('scan-type').innerText = 'Scan type: quick'
+            }, 1000)
+        }
+
+        function change_ports_scan() {
+            if (ports_scan_selected === 'quick') {
+                ports_scan_selected = 'thorough'
+            } else if (ports_scan_selected === 'thorough') {
+                ports_scan_selected = 'complete'
+            } else if (ports_scan_selected === 'complete') {
+                ports_scan_selected = 'quick'
+            }
+            document.getElementById('ports-button').innerText = 'TCP Ports Scan (' + ports_scan_selected + ')'
+        }
+
+        function change_hosts_scan() {
+
+            if (hosts_scan_selected === 'quiet') {
+                hosts_scan_selected = 'agressive'
+            } else if (hosts_scan_selected === 'agressive') {
+                hosts_scan_selected = 'brutal'
+            } else if (hosts_scan_selected === 'brutal') {
+                hosts_scan_selected = 'quiet'
+            }
+            document.getElementById('hosts-button').innerText = 'Hosts Scan (' + hosts_scan_selected + ')'
+        }
+
+        function menu_move(direction) {
+            if (!is_connected) {
+                return
+            }
+            var max_items = 1
+            // Because we have 2 items in the menu
+            var selected_item = document.getElementById('menuitem' + menu_selected)
+            selected_item.style.backgroundColor = '#34444a'
+
+            if (direction === "UP") {
+                menu_selected = (menu_selected > 0) ? menu_selected - 1 : max_items
+            } else {
+                menu_selected = (menu_selected < max_items) ? menu_selected + 1 : 0
+            }
+            selected_item = document.getElementById('menuitem' + menu_selected)
+            selected_item.style.backgroundColor = '#06B6D4'
+        }
+
+        document.addEventListener('keydown', function (event) {
+            console.log("Key pressed", event)
+            if (event.code === 1073741906) {
+                menu_move("UP")
+            } else if (event.code === 1073741905) {
+                menu_move("DOWN")
+            } else if (event.code === 27) {
+                serial_close()
+                window.location = "./html/index.html"
+            } else if (event.code === 13) {
+                menu_select()
+            } else if (event.code === 122) {
+                change_ports_scan()
+            } else if (event.code === 99) {
+                change_hosts_scan()
+            }
+        })
+
+        document.addEventListener("gamepadconnected", function (event) {
+            navigator.getGamepads()
+        })
+
+        document.addEventListener('button_press', function (event) {
+            if (gamepad.mapping[event.code] === "DPAD_UP") {
+                menu_move("UP")
+            } else if (gamepad.mapping[event.code] === "DPAD_DOWN") {
+                menu_move("DOWN")
+            } else if (gamepad.mapping[event.code] == "TRIANGLE") {
+                serial_close()
+                window.location = "index.html"
+            } else if (gamepad.mapping[event.code] == "X") {
+                menu_select()
+            } else if (gamepad.mapping[event.code] == "SQUARE") {
+                get_device_info()
+            } else if (gamepad.mapping[event.code] == "CIRCLE") {
+                change_ports_scan()
+            } else if (gamepad.mapping[event.code] == "SELECT") {
+                change_hosts_scan()
+            }
+
+        })
+
+        function get_device_info() {
+            console.log("in get_device_info")
+            device_info = net_get_device_info()
+            console.log("Got device info", device_info)
+            quark_debug("Device Info", JSON.stringify(device_info))
+
+            if (device_info['state'] < 3) { // 3 == CONNECTED
+                document.getElementById("notification").innerText = "◉ Error: You are not connected to a network."
+                document.getElementById("notification").style.color = '#de4444'
+                document.getElementById("menu").innerHTML = "<div id='loader'>Your device is not connected to a network.</div>"
+                return;
+            } else {
+                is_connected = true
+                document.getElementById("notification").innerText = "◉ IP: " + device_info.ipv4 + ' Netmask: ' + device_info.netmask
+                document.getElementById("notification").style.color = '#01EFAC'
+            }
+        }
+
+        get_device_info()
+
+    </script>
+
+</body>
+
+</html>
