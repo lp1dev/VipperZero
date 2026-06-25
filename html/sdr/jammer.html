@@ -8,77 +8,141 @@
 
 <body>
 
-  <div id="header-container">
-    <div id="header">Vipper Zero | Version 00.01 </div>
+  <div id="header-container" class="inline">
+    <div id="header">
+      <button id="back-button" onclick="setLocation('./html/sdr/index.html')">Back</button>
+      <div id="header-text">Vipper Zero | Version 00.01</div>
+    </div>
   </div>
-  <div id="notification" style="color: #01EFAC">◉ serial is connected</div>
 
-  <div id="container-small" class="inline">
+  <div id="notification" style="color: #01EFAC">◉ serial is connected!</div>
+  <div id="container" class="inline">
     <div id="menu">
-        
+      <div class="setting-container">
+        <div class="setting-label">Module</div>
+        <div class="input" id="input0" onclick="readInputNumber(0, true)">1</div>
+      </div>
+
+      <div class="setting-container">
+        <div class="setting-label">Frequency</div>
+        <div class="input" id="input1" onclick="readInputNumber(1, true)">433.0</div>
+      </div>
+
+      <div class="setting-container">
+        <div class="setting-label">Power</div>
+        <div class="input" id="input2" onclick="readInputNumber(2, true)">1</div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="button-container" id="main-button">
+        <button onclick="startJamming()" class="menu-button">Start Jammer</button>
+      </div>
+
     </div>
 
   </div>
-
-
   <div id="footer">Pre-Release Version | Not production-ready</div>
 
   <script type="text/javascript">
-    // Navigation
-    var page = 0
-    var files = []
-    var displayed = []
-    var menu_selected = 0
-    var max_menu_items = 8 // In this menu we can only display 8 items at a time
 
-    function draw_menu(files) {
-      var new_content = '<div id="files-list"></div>'
-      displayed = files
+    var alpha = "abcdefghijklmnopqrstuvwxyz"
+    var kb_buffer = ""
+    var readInputCallback = undefined
+    var settings_default = {
+      "Module": 1,
+      "Frequency": 433.0,
+      "Power": 1
+    }
+    var settings = settings_default
 
-      document.getElementById("menu").innerHTML = new_content
-      new_content = ""
-      for (var i = 0; i < files.length; i++) {
-        new_content += '<div class="file-item" id="menuitem'
-        new_content += i + '">' + files[i] + "</div>"
-      }
-      document.getElementById("files-list").innerHTML = new_content + "</div>"
+    var waiting_for_input = -1
+
+    function setLocation(location) {
+      window.location = location
     }
 
-    function menu_move(direction) {
-      var selected_item = document.getElementById('menuitem' + menu_selected)
-      selected_item.style.backgroundColor = '#2c2c2d'
-
-      if (direction === "DOWN") {
-        if (menu_selected >= displayed.length - 1) {
-          console.log("files.length / max_menu_items | 0 = ")
-          console.log((files.length / max_menu_items) | 0)
-          if (page < ((files.length / max_menu_items) | 0) - 1) {
-            page++
-          } else {
-            page = 0
-            console.log("ENTERS IN PAGE = 0")
-          }
-          draw_menu(files.slice(page * max_menu_items, (page + 1) * max_menu_items))
-          menu_selected = 0
-        } else {
-          menu_selected++
-        }
+    function notify(value, error) {
+      document.getElementById("notification").innerText = value
+      if (error) {
+        document.getElementById("notification").style.color = '#de4444'
       } else {
-        if (menu_selected <= 0) {
-          if (page > 0) {
-            page--
-          } else if (page <= 0) {
-            page = ((files.length / max_menu_items) | 0) - 1
-          }
-          draw_menu(files.slice(page * max_menu_items, (page + 1) * max_menu_items))
-          menu_selected = page <= 0 ? (displayed.length - 1) : 0
+        document.getElementById("notification").style.color = '#01EFAC'
+      }
+    }
+
+    function startJamming() {
+      console.log("STARTING TO JAM!!!")
+      // Checking values
+      if (settings["Module"] != 1 && settings["Module"] != 2) {
+        settings["Module"] = settings_default["Module"]
+        return notify("Module must be 1 or 2!", true)
+      }
+      if (settings["Power"] < 1 || settings["Power"] > 12) {
+        settings["Power"] = settings_default["Power"]
+        return notify("Power must be between 1 and 12!", true)
+      }
+      ///
+      var cmd = "jammer " + settings["Module"] + " " + settings["Frequency"] + " " + settings["Power"]
+      console.log("CMD: " + cmd)
+      var bytes_sent = serial_send(cmd)
+      var output = read_buffer_until_OK(30)
+      notify("◉ Jammer running on module " + settings["Module"])
+      console.log('Output: ' + output)
+      document.getElementById('main-button').innerHTML = '<button onclick="stopJamming()" class="menu-button">Stop Jammer</button>'
+    }
+
+    function stopJamming() {
+      var cmd = "stopjammer"
+      var bytes_sent = serial_send(cmd)
+      var output = read_buffer_until_OK(30)
+      console.log("StopJammer returned " + output)
+    }
+
+    function readInputNumber(id) {
+      document.getElementById('input' + id).style.color = '#2082A6'
+      document.getElementById('input' + id).innerText = '|'
+      waiting_for_input = id
+      readInputCallback = function (cancelled) {
+
+        document.getElementById('input' + id).innerText = kb_buffer
+        document.getElementById('input' + id).style.color = '#000000'
+        if (cancelled) {
+          document.getElementById('input' + id).innerText = "" + settings[Object.keys(settings_default)[id]]
         } else {
-          menu_selected--
+            console.log('Input callback ' + kb_buffer)
+            if (!isNaN(parseInt(kb_buffer))) {
+              if (!kb_buffer.includes(".")) {
+                settings[Object.keys(settings_default)[id]] = parseInt(kb_buffer)
+              } else {
+                settings[Object.keys(settings_default)[id]] = parseFloat(kb_buffer)
+              }
+              document.getElementById('input' + id).innerText = kb_buffer
+            } else {
+              document.getElementById('input' + id).innerText = "" + settings[Object.keys(settings_default)[id]]
+            }
+            console.log(settings)
+          }
+        waiting_for_input = -1
+        kb_buffer = ""
+      }
+    }
+
+
+    function setValue(id) {
+      var key = Object.keys(settings_default)[id]
+      console.log(typeof (settings_default[key]))
+      if (typeof (settings_default[key]) === "string" || typeof (settings_default[key] == "number")) {
+        if (quark_get_platform() === platforms.VITA) {
+          settings[key] = prompt(key, settings_default[key])
+        } else if (quark_get_platform() === platforms.LINUX) {
+          readInputNumber(id)
         }
       }
-      console.log(displayed)
-      selected_item = document.getElementById('menuitem' + menu_selected)
-      selected_item.style.backgroundColor = '#06B6D4'
+      if (waiting_for_input < 0) {
+        quark_writefile(JSON.stringify(settings), 'settings.json')
+        menu_build(settings)
+      }
     }
 
     function read_buffer_until_OK(timeout) {
@@ -96,61 +160,45 @@
       return data
     }
 
-
-
     document.addEventListener('keydown', function (event) {
       console.log("Key pressed", event)
-      if (event.code === 1073741906) {
-        menu_move("UP")
-      } else if (event.code === 1073741905) {
-        menu_move("DOWN")
-      } else if (event.code === 27) {
+      if (waiting_for_input >= 0) {
+        if (event.code >= 97 && event.code <= 122) {
+          kb_buffer += alpha[event.code - 97]
+          document.getElementById('input'+waiting_for_input).innerText = kb_buffer
+        } else if (event.code >= 48 && event.code <= 57) {
+          kb_buffer += ("" + event.code - 48)
+          document.getElementById('input'+waiting_for_input).innerText = kb_buffer
+        } else if (event.code == 13) {
+          readInputCallback(false)
+        } else if (event.code == 27) {
+          readInputCallback(true)
+        } else if (event.code == 46) {
+          kb_buffer += "."
+          document.getElementById('input'+waiting_for_input).innerText = kb_buffer
+        }
+        return
+      }
+
+      if (event.code === 27) {
         serial_close()
         window.location = "./html/sdr/index.html"
       } else if (event.code === 13) {
-        menu_select()
+        startJamming()
       }
     })
-
-    var mapping = [
-      "X",
-      "CIRCLE",
-      "SQUARE",
-      "TRIANGLE",
-      "SHARE",
-      "PS",
-      "OPTIONS",
-      "LEFTSTICK",
-      "RIGHTSTICK",
-      "LEFTSHOULDER",
-      "RIGHTSHOULDER",
-      "DPAD_UP",
-      "DPAD_DOWN",
-      "DPAD_LEFT",
-      "DPAD_RIGHT",
-    ] // Only implemented the first 15 buttons
 
     document.addEventListener("gamepadconnected", function (event) {
       navigator.getGamepads()
-      // To initialize the gamepad
     })
 
     document.addEventListener('button_press', function (event) {
-      // The "button_press" event is not a classic JS event
-      // but it is a custom quark optimization for the non-existent gamepad
-      // button press event which usually requires a setTimeout +
-      // polling of all the gamepads that is done in JS.
-      if (mapping[event.code] === "DPAD_UP") {
-        menu_move("UP")
-      } else if (mapping[event.code] === "DPAD_DOWN") {
-        menu_move("DOWN")
-      } else if (mapping[event.code] == "TRIANGLE") {
+      if (mapping[event.code] == "TRIANGLE") {
         serial_close()
-        window.location = "sdr.html"
+        window.location = "./html/sdl/index.html"
       } else if (mapping[event.code] == "X") {
-        menu_select()
+        startJamming()
       }
-
     })
 
 

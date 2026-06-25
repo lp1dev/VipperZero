@@ -8,9 +8,13 @@
 
 <body>
 
-  <div id="header-container">
-    <div id="header">Vipper Zero | Version 00.01 </div>
+  <div id="header-container" class="inline">
+    <div id="header">
+      <button id="back-button" onclick="setLocation('./html/index.html')">Back</button>
+      <div id="header-text">Vipper Zero | Version 00.01</div>
+    </div>
   </div>
+
   <div id="notification"></div>
 
   <div id="container-small" class="inline">
@@ -121,6 +125,10 @@
         }
         is_connected = serial_is_connected()
 
+        // Debug override
+        is_connected = true
+        //
+        
         if (!is_connected) {
             document.getElementById("notification").innerText = "◉ Error: Serial is not connected"
             document.getElementById("notification").style.color = '#de4444'
@@ -138,7 +146,7 @@
         var status = read_buffer_until_OK(300 )
         sdr_status = parse_status(status)
         console.log(sdr_status)
-        document.getElementById("header").innerText += "| Serial Conn OK | Firmware v" + sdr_status.firmware 
+        document.getElementById("header-text").innerText += "| Serial Conn OK | Firmware v" + sdr_status.firmware 
     }
 
     document.addEventListener('keydown', function (event) {

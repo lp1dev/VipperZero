@@ -8,9 +8,13 @@
 
 <body>
 
-    <div id="header-container">
-        <div id="header">Vipper Zero | Version 00.01 </div>
-    </div>
+    <div id="header-container" class="inline">
+        <div id="header">
+          <button id="back-button" onclick="setLocation('./html/index.html')">Back</button>
+          <div id="header-text">Vipper Zero | Version 00.01</div>
+        </div>
+      </div>
+
     <div id="notification"></div>
 
     <div id="container-small" class="inline">
@@ -19,11 +23,15 @@
             <div class="button-container" id="menuitem0" style="background-color: #06B6D4">
                 <button id="hosts-button" onclick="scan_hosts()" class="menu-button">Hosts Scan (quiet)</button>
             </div>
-<!-- 
-            <div class="button-container" id="menuitem1">
+
+
+            <!-- <div class="button-container" id="menuitem1">
                 <button id="ports-button" onclick="scan_ports()" class="menu-button">TCP Ports Scan (quick)</button>
             </div> -->
 
+            <div class="loader">
+                Placeholder value
+            </div>
         </div>
 
     </div>
@@ -36,6 +44,7 @@
         var locations = ["./html/bluetooth/scan.html"]
         var menu_selected = 0
         var is_connected = false
+        var model = false
 
         // Scan parameters
         var scanning = false
@@ -49,6 +58,10 @@
             "brutal": 10000
         }
         var is_connected = false
+
+        function setLocation(location) {
+            window.location = location
+        }
 
         function menu_select() {
             if (is_connected && !scanning) {
@@ -97,6 +110,11 @@
 
             scanning = true
             var candidates = enumerateIpAddresses(gw, netmask)
+            //
+            console.log("Candidates length ")
+            console.log(candidates.length)
+            return;
+
             var duration = (candidates.length * hosts_scan_types[hosts_scan_selected]) / 1000000
             var html = ''
             html += "Scanning " + candidates.length + " hosts...\n"
@@ -217,7 +235,6 @@
                 document.getElementById("notification").innerText = "◉ Error: You are not connected to a network."
                 document.getElementById("notification").style.color = '#de4444'
                 document.getElementById("menu").innerHTML = "<div id='loader'>Your device is not connected to a network.</div>"
-                return;
             } else {
                 is_connected = true
                 document.getElementById("notification").innerText = "◉ IP: " + device_info.ipv4 + ' Netmask: ' + device_info.netmask

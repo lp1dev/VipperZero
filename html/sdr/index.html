@@ -8,9 +8,13 @@
 
 <body>
 
-  <div id="header-container">
-    <div id="header">Vipper Zero | Version 00.01 </div>
+  <div id="header-container" class="inline">
+    <div id="header">
+      <button id="back-button" onclick="setLocation('./html/index.html')">Back</button>
+      <div id="header-text">Vipper Zero | Version 00.01</div>
+    </div>
   </div>
+
   <div id="notification"></div>
 
   <div id="container-small" class="inline">
@@ -39,7 +43,7 @@
 
   <script type="text/javascript">
     // Navigation
-    var locations = ["./html/sdr/scan.html", "./html/sdr/scan.html", "./html/sdr/subfiles.html" ]
+    var locations = ["./html/sdr/jammer.html", "./html/sdr/scan.html", "./html/sdr/subfiles.html" ]
     var menu_selected = 0
     // Serial management
     var is_connected = false
@@ -124,6 +128,9 @@
           serial_init()
         }
         is_connected = serial_is_connected()
+        // Override debug
+        is_connected = true
+        //
 
         if (!is_connected) {
             document.getElementById("notification").innerText = "◉ Error: Serial is not connected"
@@ -142,7 +149,7 @@
         var status = read_buffer_until_OK(300)
         sdr_status = parse_status(status)
         console.log(sdr_status)
-        document.getElementById("header").innerText += "| Serial Conn OK | Firmware v" + sdr_status.firmware 
+        document.getElementById("header-text").innerText += "| Serial Conn OK | Firmware v" + sdr_status.firmware 
     }
 
     document.addEventListener('keydown', function (event) {
@@ -159,32 +166,14 @@
       }
     })
 
-    var mapping = [
-      "X",
-      "CIRCLE",
-      "SQUARE",
-      "TRIANGLE",
-      "SHARE",
-      "PS",
-      "OPTIONS",
-      "LEFTSTICK",
-      "RIGHTSTICK",
-      "LEFTSHOULDER",
-      "RIGHTSHOULDER",
-      "DPAD_UP",
-      "DPAD_DOWN",
-      "DPAD_LEFT",
-      "DPAD_RIGHT",
-    ] // Only implemented the first 15 buttons
-
     document.addEventListener("gamepadconnected", function (event) {
       navigator.getGamepads()
     })
 
     document.addEventListener('button_press', function (event) {
-      if (mapping[event.code] === "DPAD_UP") {
+      if (gamepad.mapping[event.code] === "DPAD_UP") {
         menu_move("UP")
-      } else if (mapping[event.code] === "DPAD_DOWN") {
+      } else if (gamepad.mapping[event.code] === "DPAD_DOWN") {
         menu_move("DOWN")
       } else if (mapping[event.code] == "TRIANGLE") {
         serial_close()

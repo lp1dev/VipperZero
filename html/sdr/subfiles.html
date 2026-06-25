@@ -8,9 +8,13 @@
 
 <body>
 
-  <div id="header-container">
-    <div id="header">Vipper Zero | Version 00.01 </div>
+  <div id="header-container" class="inline">
+    <div id="header">
+      <button id="back-button" onclick="setLocation('./html/sdr/index.html')">Back</button>
+      <div id="header-text">Vipper Zero | Version 00.01</div>
+    </div>
   </div>
+
   <div id="notification" style="color: #01EFAC">◉ serial is connected</div>
 
   <div id="container-small" class="inline">
@@ -30,6 +34,10 @@
     var displayed = []
     var menu_selected = 0
     var max_menu_items = 8 // In this menu we can only display 8 items at a time
+
+    function setLocation(location) {
+      window.location = location
+    }
 
     function draw_menu(files) {
       var new_content = '<div id="files-list"></div>'
@@ -113,8 +121,8 @@
         files = [] // We reset files to an empty array
 
         if (!subfiles || !subfiles.length > 1) {
-          document.getElementById("menu").innerHTML = "<div id='loader'>No .sub files found.\nPlace them on your ECRF's SD card.</div>"
-          return;
+          document.getElementById("menu").innerHTML = "<div id='loader'>No .sub files found.\nPlace them on your ECRF's SD card in the SUBGHZ directory.</div>"
+          return
         }
 
         subfiles = subfiles.split('\n')
@@ -133,7 +141,6 @@
         } else {
           document.getElementById("menu").innerHTML = "<div id='loader'>No .sub files found. Place them on your ECRF's SD card.</div>"
         }
-
       }, 1000)
     }
 
@@ -151,24 +158,6 @@
       }
     })
 
-    var mapping = [
-      "X",
-      "CIRCLE",
-      "SQUARE",
-      "TRIANGLE",
-      "SHARE",
-      "PS",
-      "OPTIONS",
-      "LEFTSTICK",
-      "RIGHTSTICK",
-      "LEFTSHOULDER",
-      "RIGHTSHOULDER",
-      "DPAD_UP",
-      "DPAD_DOWN",
-      "DPAD_LEFT",
-      "DPAD_RIGHT",
-    ] // Only implemented the first 15 buttons
-
     document.addEventListener("gamepadconnected", function (event) {
       navigator.getGamepads()
       // To initialize the gamepad
@@ -179,9 +168,9 @@
       // but it is a custom quark optimization for the non-existent gamepad
       // button press event which usually requires a setTimeout +
       // polling of all the gamepads that is done in JS.
-      if (mapping[event.code] === "DPAD_UP") {
+      if (gamepad.mapping[event.code] === "DPAD_UP") {
         menu_move("UP")
-      } else if (mapping[event.code] === "DPAD_DOWN") {
+      } else if (gamepad.mapping[event.code] === "DPAD_DOWN") {
         menu_move("DOWN")
       } else if (mapping[event.code] == "TRIANGLE") {
         serial_close()

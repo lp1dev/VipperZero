@@ -8,8 +8,11 @@
 
 <body>
 
-  <div id="header-container">
-    <div id="header">Vipper Zero | Version 00.01 </div>
+  <div id="header-container" class="inline">
+    <div id="header">
+      <button id="back-button" onclick="setLocation('./html/index.html')">Back</button>
+      <div id="header-text">Vipper Zero | Version 00.01</div>
+    </div>
   </div>
 
   <div id="container" class="inline">
@@ -31,6 +34,10 @@
     var ducky = {
       "default_delay": 100,
       "last_input": undefined
+    }
+
+    function setLocation(location) {
+      window.location = location
     }
 
     function read_settings() {
@@ -120,8 +127,9 @@
       document.getElementById("menu").innerHTML = new_content
       new_content = ""
       for (var i = 0; i < payloads.length; i++) {
-        new_content += '<div class="file-item" id="menuitem'
-        new_content += i + '">' + items[i] + "</div>"
+        new_content += '<div class="file-item" id="menuitem' + i + '" '
+        new_content += 'onclick="load_payload(\'' + i + '\')">'
+        new_content += items[i] + "</div>"
       }
       document.getElementById("files-list").innerHTML = new_content + "</div>"
     }
@@ -187,16 +195,11 @@
       }
     })
 
-    document.addEventListener("gamepadconnected", function (event) {
-      navigator.getGamepads()
-      // To initialize the gamepad
-    })
+    //document.addEventListener("gamepadconnected", function (event) {
+    //  navigator.getGamepads()
+    //})
 
     document.addEventListener('button_press', function (event) {
-      // The "button_press" event is not a classic JS event
-      // but it is a custom quark optimization for the non-existent gamepad
-      // button press event which usually requires a setTimeout +
-      // polling of all the gamepads that is done in JS.
       if (gamepad.mapping[event.code] === "DPAD_UP") {
         menu_move("UP")
       } else if (gamepad.mapping[event.code] === "DPAD_DOWN") {

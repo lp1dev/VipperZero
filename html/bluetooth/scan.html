@@ -8,9 +8,13 @@
 
 <body>
 
-  <div id="header-container">
-    <div id="header">Vipper Zero | Version 00.01 </div>
+  <div id="header-container" class="inline">
+    <div id="header">
+      <button id="back-button" onclick="setLocation('./html/bluetooth/index.html')">Back</button>
+      <div id="header-text">Vipper Zero | Version 00.01</div>
+    </div>
   </div>
+
   <div id="notification" style="color: #01EFAC">◉ serial is connected</div>
 
   <div id="container-small" class="inline">
@@ -29,6 +33,10 @@
     var term = false
     var menu_selected = 0
     var max_menu_items = 8 // In this menu we can only display 8 items at a time
+
+    function setLocation(location) {
+      window.location = location
+    }
 
     function draw_menu(devices) {
       var new_content = '<div id="devices-list"></div>'

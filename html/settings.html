@@ -8,8 +8,10 @@
 
 <body>
 
-  <div id="header-container">
-    <div id="header">Vipper Zero | Version 00.01
+  <div id="header-container" class="inline">
+    <div id="header">
+      <button id="back-button" onclick="setLocation('./html/index.html')">Back</button>
+      <div id="header-text">Vipper Zero | Version 00.01</div>
     </div>
   </div>
 
@@ -30,7 +32,7 @@
     var menu_selected = 0
     var settings_default = {
       "USB Timeout": 100,
-      "Setting2": "value",
+      "Scan Threshold dBm": 75,
       "Settings3": 300
     }
 
@@ -51,7 +53,7 @@
         } else {
           if (number_only) {
             if (!isNaN(parseInt(kb_buffer))) {
-              settings[Object.keys(settings_default)[id]] = kb_buffer
+              settings[Object.keys(settings_default)[id]] = parseInt(kb_buffer)
               document.getElementById('input'+id).innerText = kb_buffer
             } else {
               document.getElementById('input'+id).innerText = "" + settings[Object.keys(settings_default)[id]]
