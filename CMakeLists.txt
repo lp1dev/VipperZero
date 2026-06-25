@@ -115,7 +115,7 @@ target_link_libraries(${PROJECT_NAME}
   SceShellSvc_stub
   taihen_stub
   hidkeyboard_stub_weak
-  usbserial_proxy_stub_weak
+  #usbserial_proxy_stub_weak
 )
 
 vita_create_self(${PROJECT_NAME}.self ${PROJECT_NAME} UNSAFE)

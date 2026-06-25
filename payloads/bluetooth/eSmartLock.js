@@ -351,7 +351,7 @@ function smartlock_unlock(mac, password, callback) {
         if (l.indexOf("service ") === 0 || l.indexOf("char ") === 0) smartlock_log("  " + l)
     }
 
-    if (!send_cli("blesub " + SVC_UUID + " " + NOTIFY_CHAR, 8000).ok) {
+    if (!send_cli("blesub " + SVC_UUID + " " + NOTIFY_CHAR, 16000).ok) {
         done(false, "blesub failed"); return
     }
 

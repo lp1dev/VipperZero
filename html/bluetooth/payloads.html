@@ -23,7 +23,7 @@
 
 
   <div id="footer">◯ : Run Scan | □ : Enumerate Services/Characteristics | △ : Back </div>
-    <div id="script-loader"></div>
+  <div id="script-loader"></div>
 
   <script type="text/javascript">
     // Navigation
@@ -55,6 +55,7 @@
 
     function exec_payload(filename) {
       var js_contents = quark_readfile("./payloads/bluetooth/" + filename)
+      quark_debug("JS_CONTENTS", js_contents)
       term = true
       document.getElementById('menu').innerHTML = '<div id="term-output"></div>'
       document.getElementById('term-output').innerText = 'Running ' + filename + '...\n'
@@ -164,6 +165,8 @@
 
   function init() {
       var dirs = quark_listdir("./payloads/bluetooth")
+      console.log('Dirs is ')
+      console.log(dirs)
       for (var i = 0; i < dirs.length; i++) {
         if (dirs[i].includes(".js")) {
           console.log(dirs[i])

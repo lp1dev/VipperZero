@@ -17,6 +17,12 @@ extern "C" {
  * defining it before including this header if you need a different size. */
 #ifndef SERIAL_BUFFER_SIZE
 #define SERIAL_BUFFER_SIZE 4096
+#define OK              0
+#define ERR_START      -1
+#define ERR_SETUP      -2
+#define ERR_NOT_OPEN   -3
+#define ERR_INVALID    -4
+#define ERR_TIMEOUT    -5
 #endif
 
 int serial_init(void);

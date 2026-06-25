@@ -53,14 +53,26 @@
     }
 
     function menu_select() {
+      return
+      if (menu_selected > displayed.length) {
+        return
+      }
       var cmd = "subsend 1 " + displayed[menu_selected].replace('.sub', '') // The firmware already appends ".sub"
       console.log("CMD: " + cmd)
-      var bytes_sent = serial_send(cmd)
-      var output = read_buffer_until_OK(30)
+      quark_debug("CMD", cmd)
+      setTimeout(function() {
+        var bytes_sent = serial_send(cmd)
+        setTimeout(function() {
+          var output = read_buffer_until_OK(300)
+        })
+      }, 1000)
       console.log('Output: ' + output)
     }
 
     function menu_move(direction) {
+      if (!displayed.length) {
+        return
+      }
       var selected_item = document.getElementById('menuitem' + menu_selected)
       selected_item.style.backgroundColor = '#2c2c2d'
 
@@ -72,7 +84,6 @@
             page++
           } else {
             page = 0
-            console.log("ENTERS IN PAGE = 0")
           }
           draw_menu(files.slice(page * max_menu_items, (page + 1) * max_menu_items))
           menu_selected = 0
@@ -101,7 +112,7 @@
       var buffer = serial_recv(timeout)
       var data = buffer
       var i = 0
-      while (data && !data.includes("OK") && !data.includes("ERR") && i < 10) {
+      while (data && !data.includes("OK") && !data.includes("ERR") && i < 2) {
         buffer = serial_recv(timeout)
         if (buffer) {
           data += buffer
@@ -116,8 +127,9 @@
     function sdr_list_subfiles() {
       document.getElementById("menu").innerHTML = "<div id='loader'>Listing .sub files on your SD card...</div>"
       var bytes_sent = serial_send("sublist")
+
       setTimeout(function () {
-        var subfiles = read_buffer_until_OK(30)
+        var subfiles = read_buffer_until_OK(300)
         files = [] // We reset files to an empty array
 
         if (!subfiles || !subfiles.length > 1) {

@@ -85,7 +85,7 @@
         } else if (line.slice(0, 6) == "STRING") {
           kb_send(line.slice(7), ducky.default_delay)
         } else if (line.slice(0, 5) == "ENTER") {
-          kb_send("ENT", ducky.default_delay)
+          //kb_send(keyboard.HID.ENTER, ducky.default_delay)
         } else if (line.slice(0, 3) == "GUI") {
           if (line.trim().length == 3) {
             kb_send(keyboard.HID.LMETA_KEY, ducky.default_delay)
@@ -215,11 +215,12 @@
 
     function init() {
       var platform = quark_get_platform()
+      
       read_settings()
-
       if (platform == platforms.VITA) {
         keyboard_init()
       }
+      
       var dirs = quark_listdir("./payloads/badusb")
       for (var i = 0; i < dirs.length; i++) {
         if (dirs[i].includes(".txt")) {

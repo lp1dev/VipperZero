@@ -181,6 +181,7 @@
     function init_settings() {
       settings = {}
       json_settings = quark_readfile('settings.json')
+
       if (json_settings && json_settings.length && json_settings.trim()[0] == '{') {
         json_settings = JSON.parse(json_settings)
         for (var i = 0; i < Object.keys(settings_default).length; i++) {

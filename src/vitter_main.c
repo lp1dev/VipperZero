@@ -8,7 +8,7 @@ int main(int argc, const char *argv[]) {
     lxb_html_document_t *document;
     lxb_css_stylesheet_t *css;
     net_init();
-    //debug_init();
+    debug_init();
     //
     document = html_to_element("html/index.html");
     css = apply_css(document, "html/style.css");

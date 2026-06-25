@@ -146,10 +146,13 @@
         var bytes_sent = serial_send("status")
         console.log("We have sent " + bytes_sent + " bytes")
 
-        var status = read_buffer_until_OK(300)
-        sdr_status = parse_status(status)
-        console.log(sdr_status)
-        document.getElementById("header-text").innerText += "| Serial Conn OK | Firmware v" + sdr_status.firmware 
+        setTimeout(function() {
+          var status = read_buffer_until_OK(300)
+          sdr_status = parse_status(status)
+          console.log(sdr_status)
+          document.getElementById("header-text").innerText += "| Serial Conn OK | Firmware v" + sdr_status.firmware 
+
+        }, 1000)
     }
 
     document.addEventListener('keydown', function (event) {

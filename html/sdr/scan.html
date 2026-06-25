@@ -15,7 +15,7 @@
     </div>
   </div>
 
-  <div id="notification" style="color: #01EFAC">◉ serial is connected!</div>
+  <div id="notification" style="color: #01EFAC">◉ serial is connected</div>
   <div id="container" class="inline">
     <div id="menu">
 
@@ -48,9 +48,12 @@
       var cmd = "scan " + (-1 * settings["Scan Threshold dBm"])
       console.log("CMD: " + cmd)
       var bytes_sent = serial_send(cmd)
-      var output = read_buffer_until_OK(30)
-      document.getElementById("menu").innerHTML = ""
-      console.log('Output: ' + output)
+      setTimeout(function() {
+        var output = read_buffer_until_OK(30)
+        document.getElementById("menu").innerHTML = ""
+        console.log('Output: ' + output)
+
+      }, 1000)
     }
 
     function read_buffer_until_OK(timeout) {
