@@ -26,10 +26,10 @@
     var kb_buffer = ""
     var readInputCallback = undefined
     var settings = undefined
-    var waiting_for_input = 0
+    var waiting_for_input = -1
     var menu_selected = 0
     var settings_default = {
-      "Setting1": true,
+      "USB Timeout": 100,
       "Setting2": "value",
       "Settings3": 300
     }
@@ -49,7 +49,6 @@
         if (cancelled) {
           document.getElementById('input'+id).innerText = "" + settings[Object.keys(settings_default)[id]]
         } else {
-          quark_debug("NUMBER ONLY IS ", number_only)
           if (number_only) {
             if (!isNaN(parseInt(kb_buffer))) {
               settings[Object.keys(settings_default)[id]] = kb_buffer
@@ -63,7 +62,7 @@
           }
           quark_writefile(JSON.stringify(settings), 'settings.json')
         }
-        waiting_for_input = 0
+        waiting_for_input = -1
         kb_buffer = ""
       }
     }
@@ -81,7 +80,7 @@
           readInputText(id, typeof(settings_default[key]) === "number")
         }
       }
-      if (waiting_for_input == 0) {
+      if (waiting_for_input < 0) {
         quark_writefile(JSON.stringify(settings), 'settings.json')
         menu_build(settings)
       }
@@ -140,7 +139,7 @@
 
     document.addEventListener('keydown', function (event) {
       console.log("Key pressed", event)
-      if (waiting_for_input > 0) {
+      if (waiting_for_input >= 0) {
         if (event.code >= 97 && event.code <= 122) {
           kb_buffer += alpha[event.code - 97]
           document.getElementById('input'+waiting_for_input).innerText = kb_buffer

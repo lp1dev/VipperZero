@@ -37,7 +37,9 @@
       var json_settings = quark_readfile('settings.json')
       if (json_settings && json_settings.length && json_settings.trim()[0] == "{") {
         json_settings = JSON.parse(json_settings)
-        // if (json_settings[""]) // TODO add setting for USB delays
+        if (json_settings['USB Timeout'] && typeof(json_settings['USB Timeout'] == "number")) {
+          ducky.default_delay = json_settings['USB Timeout']
+        }
       }
     }
 
@@ -210,6 +212,8 @@
 
     function init() {
       var platform = quark_get_platform()
+      read_settings()
+
       if (platform == platforms.VITA) {
         keyboard_init()
       }
