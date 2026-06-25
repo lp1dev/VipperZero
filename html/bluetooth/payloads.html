@@ -25,6 +25,7 @@
   <script type="text/javascript">
     // Navigation
     var page = 0
+    var term = false
     var payloads = []
     var displayed = []
     var menu_selected = 0
@@ -47,6 +48,7 @@
 
     function exec_payload(filename) {
       var js_contents = quark_readfile("./payloads/bluetooth/" + filename)
+      term = true
       document.getElementById('menu').innerHTML = '<div id="term-output"></div>'
       document.getElementById('term-output').innerText = 'Running ' + filename + '...\n'
       console.log('Set term output')
@@ -66,7 +68,7 @@
     }
 
     function menu_move(direction) {
-      if (displayed.length == 0) {
+      if (displayed.length == 0 || term) {
         return;
       }
       var selected_item = document.getElementById('menuitem' + menu_selected)
@@ -110,9 +112,9 @@
       } else if (event.code === 1073741905) {
         menu_move("DOWN")
       } else if (event.code === 27) {
-        var term_output = document.getElementById('term-output')
-        if (term_output) {
+        if (term) {
           draw_menu(payloads)
+          term = false
           document.getElementById('menuitem0').style.backgroundColor = '#06B6D4'
         } else {
           serial_close()

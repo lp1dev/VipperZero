@@ -33,6 +33,13 @@
       "last_input": undefined
     }
 
+    function read_settings() {
+      var json_settings = quark_readfile('settings.json')
+      if (json_settings && json_settings.length && json_settings.trim()[0] == "{") {
+        json_settings = JSON.parse(json_settings)
+        // if (json_settings[""]) // TODO add setting for USB delays
+      }
+    }
 
     function kb_send(data, timeout) {
       console.log("BadUSB:: Sending "+data)

@@ -26,6 +26,7 @@
     var page = 0
     var devices = []
     var displayed = []
+    var term = false
     var menu_selected = 0
     var max_menu_items = 8 // In this menu we can only display 8 items at a time
 
@@ -56,7 +57,7 @@
     }
 
     function menu_move(direction) {
-      if (displayed.length == 0) {
+      if (displayed.length == 0 || term) {
         return;
       }
       var selected_item = document.getElementById('menuitem'+menu_selected)
@@ -153,6 +154,7 @@
         var bytes_sent = serial_send("blegatt " + device)
         setTimeout(function() {
             var output = read_buffer_until_OK(30)
+            term = true
             document.getElementById('menu').innerHTML = '<div id="term-output"></div>'
             document.getElementById('term-output').innerText = output
             // document.getElementById("menu").innerText = output
