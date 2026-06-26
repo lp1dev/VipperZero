@@ -9,7 +9,7 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
 endif()
 
 # Name of the project
-project(VitterZero)
+project(VipperZero)
 
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 
@@ -17,12 +17,12 @@ find_package(SDL2 REQUIRED)
 
 ## Configuration options for this app
 # Display name (under bubble in LiveArea)
-set(VITA_APP_NAME "VitterZero")
+set(VITA_APP_NAME "VipperZero")
 # Unique ID must be exactly 9 characters. Recommended: XXXXYYYYY where X =
 # unique string of developer and Y = a unique number for this app
-set(VITA_TITLEID  "LP1D00009")
+set(VITA_TITLEID  "LP1D00010")
 # Optional version string to show in LiveArea's more info screen
-set(VITA_VERSION  "00.01")
+set(VITA_VERSION  "00.02")
 
 ## Flags and includes for building
 # Note that we make sure not to overwrite previous flags
