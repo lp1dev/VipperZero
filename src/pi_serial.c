@@ -49,7 +49,7 @@ int serial_init(void)
      * which is what we expect; anything else means something is already up. */
     int status_before = sceUsbSerialStatus();
     dbg_hex("status before start", status_before);
-    //TODO handle if status is 0x80010058 (kernel plugin not installed) or < 0 (error)
+    //TODO handle if status is 0x80010058 (kernel plugin not installed??) or < 0 (error)
 
     sceShellUtilLock(SCE_SHELL_UTIL_LOCK_TYPE_PS_BTN);
 
@@ -134,33 +134,33 @@ int serial_send(const void *buf, unsigned int len)
     if (!buf || len == 0)  return ERR_INVALID;
     if (len > MAX_CHUNK) len = MAX_CHUNK;
 
-    qdbg_hex("serial_send ENTER tid", sceKernelGetThreadId());
+    // qdbg_hex("serial_send ENTER tid", sceKernelGetThreadId());
     if (g_io_active)
         debug("serial_send: OVERLAP - another serial IO is already active", NULL);
     g_io_active = 1;
 
-    dbg_hex("serial_send len", (int)len);
+    // dbg_hex("serial_send len", (int)len);
     int r = (int)sceUsbSerialSend(buf, len * sizeof(char), 0, 1000);
-    dbg_hex("sceUsbSerialSend ret", r);
+    // dbg_hex("sceUsbSerialSend ret", r);
     g_last_sce_err = r;
 
     g_io_active = 0;
-    qdbg_hex("serial_send EXIT tid", sceKernelGetThreadId());
+    // qdbg_hex("serial_send EXIT tid", sceKernelGetThreadId());
     return r;
 }
 
 int serial_recv(void *buf, unsigned int maxlen, int timeout_ms)
 {
-    debug("serial_recv: ENTER", NULL);                 // ← first thing
-    dbg_hex("serial_recv buf ptr", (int)(uintptr_t)buf);
-    dbg_hex("serial_recv maxlen", maxlen);
-    dbg_hex("serial_recv timeout", timeout_ms);
+    // debug("serial_recv: ENTER", NULL);                 // ← first thing
+    // dbg_hex("serial_recv buf ptr", (int)(uintptr_t)buf);
+    // dbg_hex("serial_recv maxlen", maxlen);
+    // dbg_hex("serial_recv timeout", timeout_ms);
 
     if (!g_initialized) return ERR_NOT_OPEN;
     if (!buf || maxlen == 0) return ERR_INVALID;
     if (maxlen > MAX_CHUNK) maxlen = MAX_CHUNK;
 
-    qdbg_hex("serial_recv ENTER tid", sceKernelGetThreadId());
+    // qdbg_hex("serial_recv ENTER tid", sceKernelGetThreadId());
     if (g_io_active)
         debug("serial_recv: OVERLAP - another serial IO is already active", NULL);
     g_io_active = 1;
@@ -170,32 +170,32 @@ int serial_recv(void *buf, unsigned int maxlen, int timeout_ms)
 
     while (waited < timeout_ms) {
         unsigned int avail = sceUsbSerialGetRecvBufferSize();
-        dbg_hex("serial_recv avail", avail);            // ← per iteration
+        // dbg_hex("serial_recv avail", avail);            // ← per iteration
         if (avail > 0) {
             unsigned int take = avail < maxlen ? avail : maxlen;
-            dbg_hex("serial_recv take", take);
+            // dbg_hex("serial_recv take", take);
             /* NOTE: -1 = block forever. If another thread drains the buffer
              * between the GetRecvBufferSize() above and this call, this wedges. */
-            debug("serial_recv: calling sceUsbSerialRecv with infinite timeout", NULL);
+            // debug("serial_recv: calling sceUsbSerialRecv with infinite timeout", NULL);
             int r = (int)sceUsbSerialRecv(buf, take, 0, -1);
-            dbg_hex("sceUsbSerialRecv ret", r);
+            // dbg_hex("sceUsbSerialRecv ret", r);
             g_io_active = 0;
-            qdbg_hex("serial_recv EXIT(data) tid", sceKernelGetThreadId());
+            // qdbg_hex("serial_recv EXIT(data) tid", sceKernelGetThreadId());
             return r;
         }
         sceKernelDelayThread(slice_ms * 1000);
         waited += slice_ms;
     }
-    debug("serial_recv: TIMEOUT", NULL);
+    // debug("serial_recv: TIMEOUT", NULL);
     g_io_active = 0;
-    qdbg_hex("serial_recv EXIT(timeout) tid", sceKernelGetThreadId());
+    // qdbg_hex("serial_recv EXIT(timeout) tid", sceKernelGetThreadId());
     return 0;
 }
 
 int serial_send_line(const char *str)
 {
     if (!str) return ERR_INVALID;
-    qdbg_hex("serial_send_line ENTER tid", sceKernelGetThreadId());
+    // qdbg_hex("serial_send_line ENTER tid", sceKernelGetThreadId());
     size_t len = strlen(str);
     if (len > 0) {
         int r = serial_send(str, (unsigned int)len);
@@ -207,7 +207,7 @@ int serial_send_line(const char *str)
 int serial_recv_line(char *buf, unsigned int maxlen, int timeout_ms)
 {
     if (!buf || maxlen < 2) return ERR_INVALID;
-    qdbg_hex("serial_recv_line ENTER tid", sceKernelGetThreadId());
+    // qdbg_hex("serial_recv_line ENTER tid", sceKernelGetThreadId());
 
     unsigned int used = 0;
     int waited = 0;

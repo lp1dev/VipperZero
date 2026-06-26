@@ -5,4 +5,6 @@ DELAY 1000
 
 STRING Hello, world!
 
+ENTER
+
 REPEAT 5

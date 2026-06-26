@@ -15,6 +15,8 @@
     </div>
   </div>
 
+  <!-- <div id="overall-loader">Getting USB Serial Status...</div> -->
+
   <div id="notification"></div>
 
   <div id="container-small" class="inline">
@@ -39,7 +41,7 @@
   </div>
 
 
-  <div id="footer">Pre-Release Version | Not production-ready</div>
+  <div id="footer">Pre-Release Version</div>
 
   <script type="text/javascript">
     // Navigation
@@ -110,12 +112,10 @@
       var data = buffer
       var i = 0
       
-      console.log('Data buffer: ' + data)
       while (!data.includes("OK") && !data.includes("ERR") && i < 3) {
         buffer = serial_recv(timeout)
         if (buffer) {
           data += buffer
-          console.log('Data buffer: ' + data)
         } else {
           i++ // If we have more that 3 empty recv() we stop
         }
@@ -124,6 +124,7 @@
     }
 
     function sdr_init() {
+        // document.getElementById('overall-loader').style.display = 'block'
         if (!serial_is_connected()) {
           serial_init()
         }
@@ -136,23 +137,25 @@
             document.getElementById("notification").innerText = "◉ Error: Serial is not connected"
             document.getElementById("notification").style.color = '#de4444'
             document.getElementById("menu").innerHTML = "<div id='loader'>No USB serial connection with the EvilCrowRFv2.</div>"
-
             return;
         } else {
-            document.getElementById("notification").innerText = "◉ serial is connected"
+            document.getElementById("notification").innerText = "◉ serial is connected. Please wait..."
             document.getElementById("notification").style.color = '#01EFAC'
         }
 
         var bytes_sent = serial_send("status")
-        console.log("We have sent " + bytes_sent + " bytes")
 
         setTimeout(function() {
-          var status = read_buffer_until_OK(300)
+          var status = read_buffer_until_OK(1000)
           sdr_status = parse_status(status)
           console.log(sdr_status)
-          document.getElementById("header-text").innerText += "| Serial Conn OK | Firmware v" + sdr_status.firmware 
-
-        }, 1000)
+          document.getElementById("notification").innerText = "◉ serial is connected."
+          if (sdr_status.firmware) {
+            document.getElementById("header-text").innerText += "| Serial Conn OK | Firmware v" + sdr_status.firmware 
+          }
+          // document.getElementById('overall-loader').style.display = 'none'
+          // document.getElementById('overall-loader').innerText = ''
+        }, 200)
     }
 
     document.addEventListener('keydown', function (event) {

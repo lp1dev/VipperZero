@@ -51,15 +51,18 @@
     }
 
     function kb_send(data, timeout) {
-      console.log("BadUSB:: Sending "+data)
+      quark_debug("BadUSB:: Sending "+data)
+      quark_debug(data)
       ducky.last_input = data
 
       setTimeout(function() {
-        if (isNaN(data)) {
+        quark_debug("TYPEOF DATA" + typeof(data))
+        if (typeof(data) == "string") {
           keyboard_send_string(data)
         } else if (Array.isArray(data)) {
           keyboard_send_key(data[0], keyboard.HID[data[1]])
-        } else {
+        } else if (typeof(data) == "number") {
+          quark_debug("KEYBOARD SENDING KEY" + data)
           keyboard_send_key(0, data)
         }
       }, timeout)
@@ -71,11 +74,15 @@
       for (var i = 0; i < lines.length; i++) {
         var line = lines[i].trim()
         //
+        quark_debug("Executing line" + line)
+        quark_debug("Line_length" + line.length)
+        if (!line || !line.length) {
+          continue
+        }
         if (line.slice(0, 3) == "REM") {
           document.getElementById('term-output').innerText += line.slice(4) + '\n'
         } else if (line.slice(0, 5) == "DELAY") {
           var time = line.slice(6).trim()
-          console.log("Waiting for " +time)
 
           if (parseInt(time) != NaN) {
               setTimeout(function() {
@@ -85,7 +92,9 @@
         } else if (line.slice(0, 6) == "STRING") {
           kb_send(line.slice(7), ducky.default_delay)
         } else if (line.slice(0, 5) == "ENTER") {
-          //kb_send(keyboard.HID.ENTER, ducky.default_delay)
+          // keyboard_send_string("\n")
+          kb_send("\n", ducky.default_delay) // Crashes
+          // kb_send(keyboard.HID.ENTER, ducky.default_delay)
         } else if (line.slice(0, 3) == "GUI") {
           if (line.trim().length == 3) {
             kb_send(keyboard.HID.LMETA_KEY, ducky.default_delay)
@@ -218,6 +227,7 @@
       
       read_settings()
       if (platform == platforms.VITA) {
+        quark_debug("Keyboard init done")
         keyboard_init()
       }
       

@@ -46,14 +46,21 @@
       document.getElementById("menu").innerHTML = new_content
       new_content = ""
       for (var i = 0; i < files.length; i++) {
-        new_content += '<div class="file-item" id="menuitem'
-        new_content += i + '">' + files[i] + "</div>"
+        new_content += '<div class="file-item" id="menuitem' + 
+                        i + '" onclick="menu_select(' + i + ')">' +
+                        files[i]
+        new_content += "</div>"
+        console.log("NEW CONTENT")
+        console.log(new_content)
       }
       document.getElementById("files-list").innerHTML = new_content + "</div>"
     }
 
-    function menu_select() {
-      return
+    function menu_select(id) {
+      if (id) {
+        menu_selected = id
+      }
+      console.log(id)
       if (menu_selected > displayed.length) {
         return
       }
@@ -64,15 +71,18 @@
         var bytes_sent = serial_send(cmd)
         setTimeout(function() {
           var output = read_buffer_until_OK(300)
-        })
+          console.log('Output: ' + output)
+
+        }, 1000)
       }, 1000)
-      console.log('Output: ' + output)
     }
 
     function menu_move(direction) {
       if (!displayed.length) {
         return
       }
+      console.log("DISPLAYED")
+      console.log(displayed)
       var selected_item = document.getElementById('menuitem' + menu_selected)
       selected_item.style.backgroundColor = '#2c2c2d'
 
@@ -144,16 +154,20 @@
           for (var j = 0; j + 2 < subfile.length; j++) {
             filename += subfile[j]
           }
-          files.push(filename)
+          if (filename.includes(".sub")) {
+            files.push(filename)
+          }
         }
         if (subfiles.length) {
           draw_menu(files.slice(0, max_menu_items))
+          console.log("FILES")
+          console.log(files.slice(0, max_menu_items))
           document.getElementById('menuitem' + menu_selected).style.backgroundColor = '#06B6D4'
           console.log(files)
         } else {
           document.getElementById("menu").innerHTML = "<div id='loader'>No .sub files found. Place them on your ECRF's SD card.</div>"
         }
-      }, 1000)
+      }, 200)
     }
 
     document.addEventListener('keydown', function (event) {
@@ -176,10 +190,6 @@
     })
 
     document.addEventListener('button_press', function (event) {
-      // The "button_press" event is not a classic JS event
-      // but it is a custom quark optimization for the non-existent gamepad
-      // button press event which usually requires a setTimeout +
-      // polling of all the gamepads that is done in JS.
       if (gamepad.mapping[event.code] === "DPAD_UP") {
         menu_move("UP")
       } else if (gamepad.mapping[event.code] === "DPAD_DOWN") {

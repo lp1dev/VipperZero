@@ -750,6 +750,12 @@ It's network dev but without the documentation.
 
 ---
 
+# What works as of today?
+
+<!-- But now -->
+
+---
+
 # Future plans for the project
 
 - Reach a fully stable version 1.0
