@@ -129,9 +129,6 @@
           serial_init()
         }
         is_connected = serial_is_connected()
-        // Override debug
-        is_connected = true
-        //
 
         if (!is_connected) {
             document.getElementById("notification").innerText = "◉ Error: Serial is not connected"

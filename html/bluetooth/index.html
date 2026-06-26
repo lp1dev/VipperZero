@@ -125,10 +125,6 @@
         }
         is_connected = serial_is_connected()
 
-        // Debug override
-        is_connected = true
-        //
-        
         if (!is_connected) {
             document.getElementById("notification").innerText = "◉ Error: Serial is not connected"
             document.getElementById("notification").style.color = '#de4444'
