@@ -416,7 +416,7 @@ sandboxed environment.
 
 # PS Vita Hacking (2/2)
 
-<!-- When it came out in 2012, the ps vita was considered one of the thoughest mobile devices to hack. Its environment has a good separation between what the kernel can do and what the user(s) can do and  
+<!-- When it came out in 2012, the ps vita was considered one of the thoughest mobile devices to hack. Its environment has a good separation between what the kernel can do and what the user(s) can do and their packages use a DRM system that do not allow unsigned software to run.
 
 Since it runs a full PSP environment (you can download PSP games on the store and run them, just like normal PS Vita games). They run in a sandbox and since the PSP was sony's most hacked device, hackers started searching on the PSP side of the vita.
 
@@ -499,7 +499,7 @@ It has also  been used for jailbreaking the PS3 Wii and Wii U (among others)
 - **September 2015**: Arbitrary file write via email attachments
 - **May 2015**: VitaSDK is created
 - **July 2016**: Henkaku is released
-- **July 2017**: Enso is released
+- **July 2017**: Enso is released (oh and DRMs are pwned)
 - **July 2019**: The PS Vita's encryption is defeated
 - **January 2021** : Android ports
 
@@ -556,9 +556,10 @@ https://github.com/blastrock/pkgj
 <!-- We only have this thanks to people reverse engineering the ps Vita's firmware. -->
 
 
+
 ---
 
-## Hello, world
+## My Hello, world
 
 <!-- At first, I created simple apps using a graphics lib that I like: SDL.
 
@@ -752,7 +753,28 @@ It's network dev but without the documentation.
 
 # What works as of today?
 
+## SubGHz
+
+- Replaying .sub files
+- Jammer
+
+## Bluetooth
+- Scanning BLE devices and their GATT services
+- Running custom exploits written in JS
+
+## BadUSB
+
+- Basic DuckyScript execution
 <!-- But now -->
+
+---
+
+# What's coming soon
+
+- Implementation of a hosts/ports scanner in VipperZero
+- Many fixes
+- SubGHz capture/replay attacks
+- More extensive DuckyScript compatibility
 
 ---
 
@@ -768,6 +790,11 @@ It's network dev but without the documentation.
 
 # We need you!
 
+- Do you know *HTML/JavaScript*?
+  - Create new projects with *quark*!
+- Do you know a bit of *C*?
+  - Help me build *quark*!
+
 ---
 
 
@@ -775,7 +802,7 @@ It's network dev but without the documentation.
 
 - You
 - wololo.net
-- //TODO list people in the PS Vita community
+- mswlandi, Princess-of-Sleeping, rinnegatamante and everyone in the PS Vita hacking community
 
 # Links
 
